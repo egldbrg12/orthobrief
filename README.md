@@ -2,6 +2,9 @@
 
 Today's orthopaedic literature, in one page — filtered to the parts you follow.
 
+**Live: https://egldbrg12.github.io/orthobrief/** — rebuilt every morning at
+07:00 US Eastern by GitHub Actions.
+
 ```
 python3 app.py          # → http://localhost:8087
 ```
@@ -215,6 +218,25 @@ Two things are remembered on the device, in `localStorage`, with no account:
   from the current window.
 
 Nothing is uploaded anywhere; clearing site data resets both.
+
+## Publishing
+
+`.github/workflows/publish.yml` rebuilds the page daily and deploys it to GitHub
+Pages. It runs `--snapshot public/index.html --public --refresh`, then refuses to
+publish if the build came back with fewer than 20 papers or with template tokens
+left unfilled — a quiet failure would be worse than a missing day.
+
+The published build omits publishers' abstracts (`--public`). Reading them
+locally is ordinary use; republishing thousands of them is not, so the public
+page carries titles, tags, the extractive summary and a link to the source.
+Your local build still has everything.
+
+`ORTHOBRIEF_EMAIL` is a repository *secret* rather than a variable, so the
+contact address is redacted from the public build logs.
+
+**One gotcha:** GitHub disables scheduled workflows after 60 days without
+repository activity. If the feed stops updating, that's why — any commit, or a
+manual run from the Actions tab, restarts the clock.
 
 ## Notes
 
