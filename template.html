@@ -1,0 +1,1553 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OrthoBrief — today's orthopaedic literature</title>
+<script>
+  /* Runs before first paint, so an explicit choice never flashes the other
+     theme on the way in. */
+  try{
+    const t = localStorage.getItem("orthobrief.theme");
+    if(t === "dark" || t === "light") document.documentElement.dataset.theme = t;
+  }catch(_){}
+</script>
+<style>
+  /* Palette: warm stone surfaces, near-black warm ink, one blue accent.
+     The ground is grey with a little warmth in it rather than a cream, so the
+     only chroma on the page is the accent and the design dots. */
+  :root{
+    --bg:#f7f6f3; --panel:#fffffe; --panel-2:#eeece7;
+    --ink:#1f1d1a; --ink-2:#48443d; --ink-3:#6b665d;
+    --line:#e4e1d9; --line-2:#d2cec3;
+    --accent:#2f5d8a; --accent-ink:#ffffff; --accent-soft:#eaeff5;
+    --amber:#7d5a0f; --amber-soft:#f5ecd9;
+    --rose:#5c6b52; --rose-soft:#eef0ea; --rose-line:#dde1d5;
+    --shadow:0 1px 2px rgba(40,35,25,.05), 0 8px 20px -14px rgba(40,35,25,.25);
+    --radius:14px;
+    --serif:ui-serif,"Iowan Old Style","Source Serif Pro",Georgia,serif;
+    --sans:ui-sans-serif,-apple-system,"Segoe UI",Inter,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+    color-scheme:light;
+  }
+  /* The same stone, darkened — a warm near-black rather than a blue-black, so
+     the two modes read as one design. The accent lightens to clear the dark
+     surface (6.4:1) instead of staying the light-mode blue.
+
+     Declared twice on purpose: the media query follows the OS, the attribute
+     follows an explicit choice, and the attribute has to be able to win in
+     *both* directions — the `:not([data-theme="light"])` guard is what lets a
+     light choice beat an OS set to dark. */
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#1b1a18; --panel:#232220; --panel-2:#2c2a27;
+      --ink:#ece9e3; --ink-2:#b8b3aa; --ink-3:#918b80;
+      --line:#33312d; --line-2:#454239;
+      --accent:#7aa9d6; --accent-ink:#10202e; --accent-soft:#1e2a35;
+      --amber:#dfae57; --amber-soft:#2e2513;
+      --rose:#9aa88f; --rose-soft:#23261f; --rose-line:#35392f;
+      --shadow:0 1px 2px rgba(0,0,0,.45), 0 10px 30px -14px rgba(0,0,0,.6);
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+      --bg:#1b1a18; --panel:#232220; --panel-2:#2c2a27;
+      --ink:#ece9e3; --ink-2:#b8b3aa; --ink-3:#918b80;
+      --line:#33312d; --line-2:#454239;
+      --accent:#7aa9d6; --accent-ink:#10202e; --accent-soft:#1e2a35;
+      --amber:#dfae57; --amber-soft:#2e2513;
+      --rose:#9aa88f; --rose-soft:#23261f; --rose-line:#35392f;
+      --shadow:0 1px 2px rgba(0,0,0,.45), 0 10px 30px -14px rgba(0,0,0,.6);
+      color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  /* Several toolbar/panel elements carry a display rule that would otherwise
+     beat the `hidden` attribute. */
+  [hidden]{display:none !important}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:var(--sans); font-size:15px; line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit}
+  /* Near-full width: a wide gutter, not a narrow column. Titles get the whole
+     line; running text is capped separately below, because a 200-character
+     measure is unreadable however much room there is. */
+  .wrap{max-width:1600px;margin:0 auto;padding:0 clamp(20px,3.5vw,56px)}
+
+  /* ---------- header ---------- */
+  header{
+    border-bottom:1px solid var(--line);
+    background:var(--bg);
+    position:sticky; top:0; z-index:20;
+  }
+  .masthead{display:flex;align-items:baseline;gap:12px;padding:24px 0 4px;flex-wrap:wrap}
+  .masthead .datestamp{margin-left:auto}
+  .logo{
+    font-family:var(--serif); font-size:26px; font-weight:600;
+    letter-spacing:-.02em; display:flex; align-items:center; gap:9px;
+  }
+  .logo .mark{
+    width:26px;height:26px;border-radius:8px;background:var(--accent);
+    color:var(--accent-ink);display:grid;place-items:center;
+    font-family:var(--sans);font-size:14px;font-weight:700;letter-spacing:-.03em;
+    flex:0 0 auto;
+  }
+  .tagline{color:var(--ink-3);font-size:13px}
+  .datestamp{margin-left:auto;color:var(--ink-2);font-size:13px;text-align:right}
+  .datestamp b{color:var(--ink);font-weight:600}
+
+  .toolbar{display:flex;gap:8px;align-items:center;padding:8px 0 14px;flex-wrap:wrap}
+  #windowPills{order:2;margin-left:auto}
+  .fieldsbtn{order:3}
+  .search{order:1;max-width:620px}
+  .pills{display:flex;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
+  .pills button{
+    border:0;background:transparent;color:var(--ink-2);font:inherit;font-size:13px;
+    padding:5px 11px;border-radius:7px;cursor:pointer;white-space:nowrap;
+  }
+  .pills button[aria-pressed="true"]{background:var(--panel);color:var(--ink);font-weight:600;box-shadow:var(--shadow)}
+  .search{
+    flex:1 1 200px;min-width:170px;display:flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:0 11px;
+  }
+  .search input{border:0;background:transparent;color:var(--ink);font:inherit;font-size:14px;padding:8px 0;width:100%;outline:none}
+  .search svg{flex:0 0 auto;opacity:.45}
+  select.journal{
+    background:var(--panel);border:1px solid var(--line);color:var(--ink);
+    font:inherit;font-size:13px;padding:8px 10px;border-radius:10px;max-width:230px;
+  }
+  .ghost{
+    background:var(--panel);border:1px solid var(--line);color:var(--ink-2);
+    font:inherit;font-size:13px;padding:8px 12px;border-radius:10px;cursor:pointer;
+    white-space:nowrap;
+  }
+  .linkbtn{
+    background:none;border:0;padding:0;font:inherit;font-size:inherit;
+    color:var(--ink-2);text-decoration:underline;cursor:pointer;
+  }
+  .linkbtn:hover{color:var(--ink)}
+  /* Set-once control, so it lives with Refresh rather than taking header space. */
+  .theme{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+  .theme .lbl{margin-right:4px}
+  .theme button{
+    border:1px solid transparent;background:none;color:var(--ink-3);
+    font:inherit;font-size:12px;padding:2px 8px;border-radius:7px;cursor:pointer;
+  }
+  .theme button:hover{color:var(--ink)}
+  .theme button[aria-pressed="true"]{
+    border-color:var(--line-2);background:var(--panel);color:var(--ink);font-weight:600;
+  }
+  .ghost:hover{border-color:var(--line-2);color:var(--ink)}
+
+  /* ---------- study-type chips ---------- */
+  /* The row doubles as a read of the window: which designs are in it, and how
+     much of each. Same swatch colour as that paper's badge on the card below. */
+  .types{
+    display:flex;gap:7px;padding:0 0 14px;flex-wrap:wrap;align-items:center;
+  }
+  .chip{
+    --c:var(--ink-3);
+    display:inline-flex;align-items:center;gap:6px;
+    border:1px solid var(--line);background:var(--panel);
+    color:var(--ink-2);font:inherit;font-size:12.5px;line-height:1;
+    padding:6px 10px;border-radius:999px;cursor:pointer;white-space:nowrap;
+  }
+  .chip:hover{border-color:var(--line-2);color:var(--ink)}
+  .chip[aria-pressed="true"]{
+    background:color-mix(in srgb,var(--c) 16%,var(--panel));
+    border-color:color-mix(in srgb,var(--c) 55%,var(--panel));
+    color:var(--ink);font-weight:600;
+  }
+  .chip .n{color:var(--ink-3);font-variant-numeric:tabular-nums}
+  .chip[aria-pressed="true"] .n{color:var(--ink-2)}
+  .chip.all .swatch{display:none}
+
+  /* Seven series hues in a fixed order, validated for colour-vision deficiency
+     as an adjacent set (worst adjacent ΔE 9.1 light / 8.4 dark) — the order is
+     the safety mechanism, so don't reshuffle it. Everything past the seventh
+     design is grey: past ~7, categorical hues stop being tellable apart, and
+     the label is doing the identifying anyway. */
+  [data-k="rct"]      {--c:#2a78d6}
+  [data-k="sysrev"]   {--c:#eb6834}
+  [data-k="registry"] {--c:#1baf7a}
+  [data-k="cohort"]   {--c:#eda100}
+  [data-k="case"]     {--c:#e87ba4}
+  [data-k="biomech"]  {--c:#008300}
+  [data-k="basic"]    {--c:#4a3aa7}
+  [data-k="rest"],[data-k="ml"],[data-k="technique"],[data-k="survey"],
+  [data-k="biblio"],[data-k="review"],[data-k="other"]{--c:#7d7a72}
+  /* The dark steps of the same seven hues, scoped like the surface tokens so
+     they follow an explicit theme choice too. Flat descendant selectors, not
+     CSS nesting — this file has to work in whatever browser it lands in. */
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]) [data-k="rct"]{--c:#3987e5}
+    :root:not([data-theme="light"]) [data-k="sysrev"]{--c:#d95926}
+    :root:not([data-theme="light"]) [data-k="registry"]{--c:#199e70}
+    :root:not([data-theme="light"]) [data-k="cohort"]{--c:#c98500}
+    :root:not([data-theme="light"]) [data-k="case"]{--c:#d55181}
+    :root:not([data-theme="light"]) [data-k="biomech"]{--c:#008300}
+    :root:not([data-theme="light"]) [data-k="basic"]{--c:#9085e9}
+    :root:not([data-theme="light"]) [data-k="rest"],:root:not([data-theme="light"]) [data-k="ml"],:root:not([data-theme="light"]) [data-k="technique"],:root:not([data-theme="light"]) [data-k="survey"],
+    :root:not([data-theme="light"]) [data-k="biblio"],:root:not([data-theme="light"]) [data-k="review"],:root:not([data-theme="light"]) [data-k="other"]{--c:#8c8880}
+  }
+  :root[data-theme="dark"] [data-k="rct"]{--c:#3987e5}
+  :root[data-theme="dark"] [data-k="sysrev"]{--c:#d95926}
+  :root[data-theme="dark"] [data-k="registry"]{--c:#199e70}
+  :root[data-theme="dark"] [data-k="cohort"]{--c:#c98500}
+  :root[data-theme="dark"] [data-k="case"]{--c:#d55181}
+  :root[data-theme="dark"] [data-k="biomech"]{--c:#008300}
+  :root[data-theme="dark"] [data-k="basic"]{--c:#9085e9}
+  :root[data-theme="dark"] [data-k="rest"],:root[data-theme="dark"] [data-k="ml"],:root[data-theme="dark"] [data-k="technique"],:root[data-theme="dark"] [data-k="survey"],
+  :root[data-theme="dark"] [data-k="biblio"],:root[data-theme="dark"] [data-k="review"],:root[data-theme="dark"] [data-k="other"]{--c:#8c8880}
+
+  /* Identity rides a swatch beside the text, never the text itself — several of
+     these hues are illegible as type on the surface. */
+  .swatch{
+    width:9px;height:9px;border-radius:3px;background:var(--c);
+    flex:0 0 auto;display:inline-block;
+  }
+  .study{
+    display:inline-flex;align-items:center;gap:6px;
+    font-size:12.5px;font-weight:600;color:var(--ink-2);cursor:help;
+  }
+  /* A guessed design shouldn't read as certain as an NLM-tagged one. */
+  .study.unsure{color:var(--ink-3);font-weight:400}
+
+  /* ---------- profile ---------- */
+/* Everything that makes the feed yours: what you do, what you follow, what
+   you're chasing, and what the app has learned from watching you use it.
+   One object, on the device. Swapping localStorage for a server later means
+   changing loadProfile/saveProfile and nothing else. */
+const PROFILE_KEY = "orthobrief.profile";
+const DEFAULT_PROFILE = {
+  onboarded: false, role: "", fields: [], keywords: [], weights: {}, made: "",
+};
+function loadProfile(){
+  try{ return {...DEFAULT_PROFILE, ...(JSON.parse(localStorage.getItem(PROFILE_KEY) || "{}"))}; }
+  catch(_){ return {...DEFAULT_PROFILE}; }
+}
+function saveProfile(){ try{ localStorage.setItem(PROFILE_KEY, JSON.stringify(PROFILE)); }catch(_){} }
+let PROFILE = loadProfile();
+
+/* Roles differ in what they're reading *for*, which is a better default than
+   asking everyone to tick ten boxes on their first visit. */
+const ROLES = [
+  {key: "student",   label: "Medical student",   hint: "Exploring the specialty"},
+  {key: "resident",  label: "Resident",          hint: "Clinical reading, journal club"},
+  {key: "fellow",    label: "Fellow",            hint: "One subspecialty, in depth"},
+  {key: "attending", label: "Attending",         hint: "Keeping current in practice"},
+  {key: "research",  label: "Researcher",        hint: "Methods and gaps, all fields"},
+];
+
+/* ---------- tailoring ---------- */
+/* Two rules held throughout: this **ranks, it never hides** — missing a paper
+   is the one failure a literature tool cannot afford — and every score can be
+   explained in words on the card that carries it. */
+const LEARN = {save: 3, open: 1, cap: 24};
+
+function bump(key, by){
+  const w = PROFILE.weights;
+  w[key] = Math.max(-LEARN.cap, Math.min(LEARN.cap, (w[key] || 0) + by));
+  saveProfile();
+}
+function learnFrom(p, by){
+  const st = (p.study || {}).key, j = p.journal || "";
+  ((p.fields || {}).all || []).forEach(k => bump("field:" + k, by));
+  if(st) bump("design:" + st, by);
+  if(j) bump("journal:" + j, by);
+}
+
+function scoreFor(p){
+  const why = [];
+  let score = 0;
+  const chosen = new Set(PROFILE.fields.length ? PROFILE.fields : state.fields);
+  ((p.fields || {}).all || []).forEach(k => {
+    if(chosen.has(k)){ score += 3; why.push(FIELD_LABEL[k] || k); }
+  });
+  const hay = `${p.title || ""} ${p.abstract || ""}`.toLowerCase();
+  (PROFILE.keywords || []).forEach(kw => {
+    if(kw && hay.includes(kw.toLowerCase())){ score += 6; why.push(`“${kw}”`); }
+  });
+  const w = PROFILE.weights || {};
+  const learned = ((p.fields || {}).all || []).reduce((a, k) => a + (w["field:" + k] || 0), 0)
+    + (w["design:" + ((p.study || {}).key || "")] || 0)
+    + (w["journal:" + (p.journal || "")] || 0);
+  if(learned) why.push(learned > 0 ? "papers like ones you saved" : "");
+  return {score: score + learned * 0.6, why: why.filter(Boolean)};
+}
+
+/* ---------- reading state ---------- */
+/* Two things live on the device: which papers you have already been shown, and
+   which you kept. Both are keyed by DOI (falling back to PMID, then title) so a
+   paper keeps its identity across windows and refetches. */
+const paperId = p =>
+  p.doi ? "d:" + p.doi : p.pmid ? "p:" + p.pmid
+  : "t:" + String(p.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 60);
+
+function loadStore(key){
+  try{ return JSON.parse(localStorage.getItem(key) || "{}") || {}; }catch(_){ return {}; }
+}
+function saveStore(key, obj){
+  try{ localStorage.setItem(key, JSON.stringify(obj)); }catch(_){}
+}
+
+const SEEN_KEY = "orthobrief.seen", SAVED_KEY = "orthobrief.saved";
+const SEEN_DAYS = 60;                        // long enough for any window
+let SEEN = loadStore(SEEN_KEY);
+let SAVED = loadStore(SAVED_KEY);
+/* Ids that were unseen when this session started. Held for the whole session so
+   the "new" marks don't evaporate out from under you as you read. */
+const NEW_IDS = new Set();
+
+function markSeen(papers){
+  const today = Math.floor(Date.now() / 86400000);
+  let dirty = false;
+  papers.forEach(p => {
+    const id = paperId(p);
+    if(SEEN[id] === undefined){ NEW_IDS.add(id); dirty = true; }
+    if(SEEN[id] !== today){ SEEN[id] = today; dirty = true; }
+  });
+  if(dirty){
+    for(const [id, day] of Object.entries(SEEN))
+      if(today - day > SEEN_DAYS && !NEW_IDS.has(id)) delete SEEN[id];
+    saveStore(SEEN_KEY, SEEN);
+  }
+}
+
+const isNew = p => NEW_IDS.has(paperId(p));
+const isSaved = p => !!SAVED[paperId(p)];
+
+/* Saved papers outlive the window they were found in, so the record has to
+   carry enough of the paper to render and to cite without the feed. */
+function toggleSave(p, btn){
+  const id = paperId(p);
+  if(SAVED[id]) delete SAVED[id];
+  else SAVED[id] = {
+    doi: p.doi || "", doi_ok: p.doi_ok, pmid: p.pmid || "", title: p.title || "",
+    journal: p.journal || "", date: p.date || "", url: p.url || "",
+    authors: p.authors || [], authors_short: p.authors_short || "",
+    fields: p.fields || {all: []}, study: p.study || null, saved_at: new Date().toISOString(),
+  };
+  saveStore(SAVED_KEY, SAVED);
+  learnFrom(p, SAVED[id] ? LEARN.save : -LEARN.save);   // un-saving is a signal too
+  // Re-rendering the whole list here would collapse any abstract the reader has
+  // open, so only the saved view — where membership actually changes — reloads.
+  if(state.view === "saved" || !btn) return render();
+  const on = !!SAVED[id];
+  btn.classList.toggle("on", on);
+  btn.setAttribute("aria-pressed", String(on));
+  btn.textContent = on ? "★ Saved" : "☆ Save";
+  renderViewCounts();
+}
+
+/* The current feed's copy is richer (summary, abstract), so prefer it and fall
+   back to the stored record for anything outside the window. */
+function savedPapers(){
+  const live = new Map((state.feed.papers || []).map(p => [paperId(p), p]));
+  return Object.entries(SAVED)
+    .sort((a, b) => (b[1].saved_at || "").localeCompare(a[1].saved_at || ""))
+    .map(([id, rec]) => live.get(id) || rec);
+}
+
+/* ---------- citation export ---------- */
+const _riEsc = v => String(v || "").replace(/\r?\n/g, " ").trim();
+
+function toRIS(papers){
+  return papers.map(p => {
+    const L = ["TY  - JOUR", `TI  - ${_riEsc(p.title)}`];
+    (p.authors || []).forEach(a => L.push(`AU  - ${_riEsc(a)}`));
+    if(p.journal) L.push(`JO  - ${_riEsc(p.journal)}`);
+    if(p.date){ L.push(`PY  - ${p.date.slice(0, 4)}`); L.push(`DA  - ${p.date}`); }
+    if(p.doi) L.push(`DO  - ${_riEsc(p.doi)}`);
+    if(p.pmid) L.push(`AN  - ${_riEsc(p.pmid)}`);
+    if(p.url) L.push(`UR  - ${_riEsc(p.url)}`);
+    if(p.abstract) L.push(`AB  - ${_riEsc(p.abstract)}`);
+    L.push("ER  - ");
+    return L.join("\n");
+  }).join("\n\n") + "\n";
+}
+
+function toBibTeX(papers){
+  const used = {};
+  return papers.map(p => {
+    const last = String((p.authors || [])[0] || "anon").split(/\s+/).pop().toLowerCase();
+    const year = (p.date || "").slice(0, 4) || "nd";
+    const word = String(p.title || "ref").toLowerCase().replace(/[^a-z0-9 ]/g, "")
+      .split(/\s+/).find(w => w.length > 3) || "ref";
+    let key = `${last}${year}${word}`.replace(/[^a-z0-9]/g, "");
+    used[key] = (used[key] || 0) + 1;
+    if(used[key] > 1) key += String.fromCharCode(96 + used[key]);
+    const f = [];
+    // Braces round the title keep the journal's capitalisation intact.
+    if(p.title) f.push(`  title = {{${_riEsc(p.title)}}}`);
+    if((p.authors || []).length) f.push(`  author = {${p.authors.map(_riEsc).join(" and ")}}`);
+    if(p.journal) f.push(`  journal = {${_riEsc(p.journal)}}`);
+    if(year !== "nd") f.push(`  year = {${year}}`);
+    if(p.doi) f.push(`  doi = {${_riEsc(p.doi)}}`);
+    if(p.pmid) f.push(`  pmid = {${_riEsc(p.pmid)}}`);
+    return `@article{${key},\n${f.join(",\n")}\n}`;
+  }).join("\n\n") + "\n";
+}
+
+function download(name, text){
+  const blob = new Blob([text], {type: "text/plain;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+/* ---------- onboarding ---------- */
+/* Three questions, none of them required. The aim is a feed that is already
+   yours on the first screen, not a form to complete. */
+const SUGGESTED_KW = ["robotic", "periprosthetic joint infection", "ACL", "rotator cuff",
+  "cartilage", "machine learning", "opioid", "cost", "registry", "nonunion",
+  "reverse shoulder", "scoliosis", "return to sport", "outpatient"];
+let obStep = 0, obDraft = null;
+
+function obOpen(){
+  obDraft = {role: PROFILE.role, fields: PROFILE.fields.slice(), keywords: PROFILE.keywords.slice()};
+  if(!obDraft.fields.length) obDraft.fields = ALL_FIELDS.slice();
+  obStep = 0;
+  document.getElementById("onboard").hidden = false;
+  obRender();
+}
+function obClose(saveIt){
+  if(saveIt){
+    PROFILE.onboarded = true;
+    PROFILE.role = obDraft.role;
+    PROFILE.fields = obDraft.fields;
+    PROFILE.keywords = obDraft.keywords;
+    PROFILE.made = PROFILE.made || new Date().toISOString();
+    saveProfile();
+    state.fields = obDraft.fields.length ? obDraft.fields.slice() : ALL_FIELDS.slice();
+    saveFields(state.fields);
+    if(PROFILE.keywords.length || PROFILE.role) state.view = "foryou";
+  }else{
+    PROFILE.onboarded = true;                    // asked once, never nag
+    saveProfile();
+  }
+  document.getElementById("onboard").hidden = true;
+  render();
+}
+
+function obRender(){
+  const counts = Object.fromEntries((state.feed.fields || []).map(f => [f.key, f.n]));
+  const body = document.getElementById("obBody");
+  if(obStep === 0){
+    body.innerHTML = `
+      <h2 id="obTitle">What brings you to the literature?</h2>
+      <p class="sub">This only sets sensible defaults — you can change everything later.</p>
+      <div class="ob-opts">${ROLES.map(r => `
+        <button class="ob-opt" data-role="${esc(r.key)}" aria-pressed="${obDraft.role === r.key}">
+          <span>${esc(r.label)}</span><span class="hint">${esc(r.hint)}</span>
+        </button>`).join("")}</div>`;
+  }else if(obStep === 1){
+    body.innerHTML = `
+      <h2 id="obTitle">Which parts of orthopaedics?</h2>
+      <p class="sub">Counts are today's papers. Pick as many as you like — nothing gets
+        hidden permanently, this just decides what leads.</p>
+      <div class="ob-opts two">${FIELDS_META.map(f => `
+        <button class="ob-opt" data-field="${esc(f.key)}" aria-pressed="${obDraft.fields.includes(f.key)}">
+          <span>${esc(f.label)}</span><span class="n">${counts[f.key] === undefined ? "" : counts[f.key]}</span>
+        </button>`).join("")}</div>`;
+  }else{
+    body.innerHTML = `
+      <h2 id="obTitle">Anything you're chasing?</h2>
+      <p class="sub">Topics, techniques, a project you're working on. Papers matching these
+        rise to the top of <b>For you</b> — and they're only a ranking, never a filter.</p>
+      <div class="ob-kw" id="obKw">${obDraft.keywords.map(k =>
+        `<button data-del="${esc(k)}">${esc(k)} ✕</button>`).join("")}</div>
+      <input class="ob-input" id="obInput" placeholder="e.g. periprosthetic joint infection — Enter to add" autocomplete="off">
+      <div class="ob-sug">${SUGGESTED_KW.filter(k => !obDraft.keywords.includes(k))
+        .slice(0, 8).map(k => `<button data-add="${esc(k)}">+ ${esc(k)}</button>`).join("")}</div>`;
+  }
+  document.getElementById("obDots").innerHTML = [0, 1, 2].map(i =>
+    `<i class="${i === obStep ? "on" : ""}"></i>`).join("");
+  const next = document.getElementById("obNext");
+  next.textContent = obStep === 2 ? "Start reading" : "Continue";
+  next.disabled = obStep === 1 && !obDraft.fields.length;
+  // The step redraws on every toggle, so put the cursor back where it was —
+  // otherwise adding a second keyword means reaching for the mouse again.
+  if(obStep === 2) document.getElementById("obInput").focus();
+}
+
+document.getElementById("obNext").addEventListener("click", () => {
+  if(obStep < 2){ obStep++; obRender(); } else obClose(true);
+});
+document.getElementById("obSkip").addEventListener("click", () => obClose(false));
+document.getElementById("editProfile").addEventListener("click", obOpen);
+document.getElementById("obBody").addEventListener("click", e => {
+  const role = e.target.closest("[data-role]");
+  if(role){
+    obDraft.role = obDraft.role === role.dataset.role ? "" : role.dataset.role;
+    // A researcher reads across the whole field; a fellow rarely does.
+    if(obDraft.role === "research") obDraft.fields = ALL_FIELDS.slice();
+    obRender(); return;
+  }
+  const fld = e.target.closest("[data-field]");
+  if(fld){
+    const k = fld.dataset.field;
+    obDraft.fields = obDraft.fields.includes(k)
+      ? obDraft.fields.filter(x => x !== k)
+      : ALL_FIELDS.filter(x => x === k || obDraft.fields.includes(x));
+    obRender(); return;
+  }
+  const add = e.target.closest("[data-add]"), del = e.target.closest("[data-del]");
+  if(add){ obDraft.keywords.push(add.dataset.add); obRender(); }
+  if(del){ obDraft.keywords = obDraft.keywords.filter(k => k !== del.dataset.del); obRender(); }
+});
+document.getElementById("obBody").addEventListener("keydown", e => {
+  if(e.target.id !== "obInput" || e.key !== "Enter") return;
+  e.preventDefault();
+  const v = e.target.value.trim();
+  if(v && !obDraft.keywords.includes(v)){ obDraft.keywords.push(v); obRender(); }
+});
+
+/* ---------- appearance ---------- */
+/* "auto" means follow the OS; anything else is an explicit override that has to
+   win over it, which is what the data-theme attribute does in the stylesheet. */
+function currentTheme(){
+  try{ return localStorage.getItem("orthobrief.theme") || "auto"; }catch(_){ return "auto"; }
+}
+function applyTheme(mode){
+  try{
+    if(mode === "auto"){ localStorage.removeItem("orthobrief.theme"); delete document.documentElement.dataset.theme; }
+    else{ localStorage.setItem("orthobrief.theme", mode); document.documentElement.dataset.theme = mode; }
+  }catch(_){
+    if(mode === "auto") delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = mode;
+  }
+  renderTheme();
+}
+function renderTheme(){
+  const now = currentTheme();
+  document.querySelectorAll("#theme button[data-theme-set]").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.themeSet === now)));
+}
+document.getElementById("theme").addEventListener("click", e => {
+  const b = e.target.closest("button[data-theme-set]");
+  if(b) applyTheme(b.dataset.themeSet);
+});
+renderTheme();
+
+/* ---------- fields picker ---------- */
+  .fieldsbtn{position:relative}
+  .fieldsbtn .count{
+    display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;
+    min-width:17px;text-align:center;
+    background:var(--accent-soft);color:var(--accent);font-size:11.5px;font-weight:600;
+  }
+  .picker{
+    position:absolute;top:calc(100% + 8px);right:0;z-index:40;width:min(330px,calc(100vw - 40px));
+    max-height:min(72vh,620px);overflow-y:auto;
+    background:var(--panel);border:1px solid var(--line-2);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:14px 16px;
+  }
+  .picker .sect + .sect{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+  .picker .secthead{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px}
+  .picker h4{
+    margin:0;font-size:11px;font-weight:700;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--ink-3);
+  }
+  .picker .secthead button{
+    border:0;background:none;color:var(--ink-2);font:inherit;font-size:12px;
+    cursor:pointer;text-decoration:underline;padding:0;
+  }
+  .picker .secthead button:hover{color:var(--ink)}
+  .picker .txt{display:flex;align-items:center;gap:7px}
+  .picker label{
+    display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:8px;
+    cursor:pointer;font-size:13.5px;
+  }
+  .picker label:hover{background:var(--panel-2)}
+  .picker input{margin:2px 0 0;accent-color:var(--accent);flex:0 0 auto}
+  .picker .txt{flex:1;min-width:0}
+  .picker .n{color:var(--ink-3);font-size:12px;font-variant-numeric:tabular-nums;flex:0 0 auto}
+  .picker .none{color:var(--amber);font-size:12px;margin:8px 2px 0}
+
+  /* The paper's own field, next to its journal — rose, so the two badges are
+     told apart by hue as well as position. */
+  .field{font-size:12.5px;color:var(--rose);white-space:nowrap}
+
+  .pills .tag{font-variant-numeric:tabular-nums;opacity:.7}
+  /* Loud enough to catch the eye on a scan, quiet enough not to shout. */
+  .isnew{
+    font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    color:var(--accent);background:var(--accent-soft);
+    border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);
+    padding:1px 6px;border-radius:5px;
+  }
+  .save{
+    border:0;background:none;padding:0;font:inherit;font-size:12px;
+    color:var(--ink-3);cursor:pointer;
+  }
+  .save:hover{color:var(--ink)}
+  .save.on{color:var(--accent);font-weight:600}
+  .savedbar{
+    display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+    padding:10px 0 2px;font-size:12.5px;color:var(--ink-3);
+  }
+
+  /* ---------- onboarding ---------- */
+  .onboard{
+    position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:20px;
+    background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(3px);
+  }
+  .ob-card{
+    width:min(560px,100%);max-height:88vh;overflow-y:auto;
+    background:var(--panel);border:1px solid var(--line-2);border-radius:16px;
+    box-shadow:0 20px 60px -20px rgba(0,0,0,.35);padding:26px 26px 18px;
+  }
+  .ob-card h2{font-family:var(--serif);font-size:22px;margin:0 0 6px;letter-spacing:-.01em}
+  .ob-card .sub{color:var(--ink-3);font-size:13.5px;margin:0 0 18px;line-height:1.55}
+  .ob-opts{display:grid;gap:8px}
+  .ob-opts.two{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+  .ob-opt{
+    display:flex;align-items:baseline;gap:9px;text-align:left;width:100%;
+    border:1px solid var(--line);background:var(--panel);border-radius:11px;
+    padding:11px 13px;font:inherit;font-size:14px;color:var(--ink);cursor:pointer;
+  }
+  .ob-opt:hover{border-color:var(--line-2)}
+  .ob-opt[aria-pressed="true"]{
+    border-color:var(--accent);background:var(--accent-soft);font-weight:600;
+  }
+  .ob-opt .hint{color:var(--ink-3);font-size:12.5px;font-weight:400}
+  .ob-opt .n{margin-left:auto;color:var(--ink-3);font-size:12.5px;font-variant-numeric:tabular-nums}
+  .ob-kw{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+  .ob-kw button{
+    border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent);
+    font:inherit;font-size:12.5px;padding:4px 9px;border-radius:999px;cursor:pointer;
+  }
+  .ob-input{
+    width:100%;border:1px solid var(--line);background:var(--panel);border-radius:11px;
+    padding:10px 12px;font:inherit;font-size:14px;color:var(--ink);outline:none;
+  }
+  .ob-input:focus{border-color:var(--accent)}
+  .ob-sug{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .ob-sug button{
+    border:1px dashed var(--line-2);background:none;color:var(--ink-3);
+    font:inherit;font-size:12.5px;padding:4px 9px;border-radius:999px;cursor:pointer;
+  }
+  .ob-sug button:hover{color:var(--ink);border-color:var(--ink-3)}
+  .ob-foot{display:flex;align-items:center;gap:12px;margin-top:20px;padding-top:14px;border-top:1px solid var(--line)}
+  .ob-dots{display:flex;gap:5px;margin-right:auto}
+  .ob-dots i{width:6px;height:6px;border-radius:50%;background:var(--line-2);display:block}
+  .ob-dots i.on{background:var(--accent)}
+  .ob-next{
+    border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);
+    font:inherit;font-size:13.5px;font-weight:600;padding:8px 18px;border-radius:10px;cursor:pointer;
+  }
+  .ob-next:disabled{opacity:.45;cursor:default}
+
+  /* why a paper is where it is, in words */
+  .why{font-size:12px;color:var(--accent);margin-top:6px}
+
+  /* ---------- stats strip ---------- */
+  .stats{padding:2px 0 0;color:var(--ink-3);font-size:12.5px;font-variant-numeric:tabular-nums}
+
+  /* ---------- cards ---------- */
+  /* No card boxes: a hairline separates papers and the title carries the
+     weight. Six bordered shapes per paper were competing with the one thing
+     worth scanning. */
+  main{padding:0 0 80px}
+  .card{
+    background:none;border:0;border-radius:0;box-shadow:none;
+    padding:26px 0 24px;margin:0;border-bottom:1px solid var(--line);
+  }
+  .card:first-child{padding-top:12px}
+  .meta{
+    display:flex;align-items:baseline;flex-wrap:wrap;margin-bottom:10px;
+    font-size:12.5px;color:var(--ink-3);
+  }
+  .meta > *{margin-right:9px}
+  .badge{font-size:12.5px;color:var(--ink-3)}
+  .date{color:var(--ink-3);font-size:12.5px}
+  .date::before,.field::before{content:"· ";color:var(--line-2)}
+  h2{
+    font-family:var(--serif);font-size:clamp(22px,1.7vw,29px);line-height:1.22;
+    font-weight:600;letter-spacing:-.018em;margin:0 0 8px;
+  }
+  h2 a{text-decoration:none}
+  h2 a:hover{text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--accent)}
+  .authors{color:var(--ink-3);font-size:13.5px;margin-bottom:0;max-width:90ch}
+
+  .tldr{
+    background:none;border-left:2px solid var(--accent);border-radius:0;
+    padding:2px 0 2px 16px;margin:14px 0 0;
+  }
+  .tldr .lbl{display:none}
+  .tldr p{margin:0;font-size:15px;color:var(--ink-2);line-height:1.6;max-width:88ch}
+
+  details.abs{margin-top:10px}
+  details.abs summary{
+    cursor:pointer;list-style:none;color:var(--ink-2);font-size:13px;
+    display:inline-flex;align-items:center;gap:6px;user-select:none;
+  }
+  details.abs summary::-webkit-details-marker{display:none}
+  details.abs summary::after{content:"▾";font-size:10px;transition:transform .15s}
+  details.abs[open] summary::after{transform:rotate(180deg)}
+  details.abs summary:hover{color:var(--ink)}
+  .abs-body{
+    margin-top:10px;padding-top:12px;border-top:1px solid var(--line);
+    color:var(--ink-2);font-size:14px;line-height:1.65;max-width:92ch;
+  }
+  .abs-body .sec{color:var(--ink);font-weight:650;font-size:11.5px;letter-spacing:.05em;display:block;margin-top:10px}
+  .abs-body .sec:first-child{margin-top:0}
+
+  .foot{display:flex;align-items:baseline;gap:14px;margin-top:16px;flex-wrap:wrap}
+  .doi{
+    font-family:var(--mono);font-size:12px;color:var(--ink-3);
+    background:none;border:0;padding:0;text-decoration:none;
+  }
+  .doi:hover{color:var(--ink);text-decoration:underline}
+  .doi.dead{text-decoration:line-through;text-decoration-color:var(--line-2);cursor:help;opacity:.75}
+  /* The copy button only earns its space once you're on the paper. */
+  .copy{
+    border:0;background:none;color:var(--ink-3);
+    font:inherit;font-size:12px;padding:0;cursor:pointer;opacity:0;transition:opacity .12s;
+  }
+  .card:hover .copy,.copy:focus{opacity:1}
+  .copy:hover{color:var(--ink)}
+  .copy.done{color:var(--accent);border-color:var(--accent)}
+  .src{margin-left:auto;color:var(--ink-3);font-size:12px;opacity:.75}
+  .no-abs{color:var(--ink-3);font-size:13px;font-style:italic;margin:10px 0 0}
+
+  /* ---------- states ---------- */
+  .empty{text-align:center;padding:70px 20px;color:var(--ink-3)}
+  .empty h3{font-family:var(--serif);font-size:21px;color:var(--ink);margin:0 0 8px;font-weight:600}
+  .empty p{margin:0 auto;max-width:420px;font-size:14px;line-height:1.6}
+  .banner{
+    background:var(--amber-soft);border:1px solid color-mix(in srgb,var(--amber) 28%,transparent);
+    color:var(--amber);border-radius:10px;padding:10px 14px;font-size:13px;margin:14px 0;
+  }
+  .skeleton{height:150px;border-radius:var(--radius);background:var(--panel);
+    border:1px solid var(--line);margin:14px 0;position:relative;overflow:hidden}
+  .skeleton::after{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--ink) 5%,transparent),transparent);
+    animation:sweep 1.3s infinite;
+  }
+  @keyframes sweep{to{transform:translateX(100%)}}
+  body.loading .stats{opacity:.4}
+
+  footer{border-top:1px solid var(--line);padding:18px 0 44px;color:var(--ink-3);font-size:12.5px}
+  .fcontrols{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-bottom:14px}
+  .fnote{margin:0;line-height:1.6;max-width:64ch}
+  footer a{color:var(--ink-2)}
+
+  @media (max-width:620px){
+    .datestamp{margin-left:0;text-align:left;width:100%}
+    h2{font-size:18px}
+    .card{padding:16px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="onboard" id="onboard" hidden>
+  <div class="ob-card" role="dialog" aria-modal="true" aria-labelledby="obTitle">
+    <div class="ob-body" id="obBody"></div>
+    <div class="ob-foot">
+      <span class="ob-dots" id="obDots"></span>
+      <button class="linkbtn" id="obSkip">Skip</button>
+      <button class="ob-next" id="obNext">Continue</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+    <div class="masthead">
+      <div class="logo"><span class="mark">OB</span>OrthoBrief</div>
+      <div class="tagline">today's orthopaedic literature</div>
+      <div class="datestamp" id="datestamp"></div>
+    </div>
+    <div class="toolbar">
+      <div class="pills" id="viewPills">
+        <button data-view="all" aria-pressed="true">All</button>
+        <button data-view="foryou" aria-pressed="false">For you</button>
+        <button data-view="new" aria-pressed="false">New<span class="tag" id="newCount"></span></button>
+        <button data-view="saved" aria-pressed="false">Saved<span class="tag" id="savedCount"></span></button>
+      </div>
+      <div class="pills" id="windowPills">
+        <button data-days="1" aria-pressed="true">Today</button>
+        <button data-days="3" aria-pressed="false">3 days</button>
+        <button data-days="7" aria-pressed="false">7 days</button>
+        <button data-days="14" aria-pressed="false">14 days</button>
+      </div>
+      <label class="search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+          <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
+        </svg>
+        <input id="q" type="search" placeholder="Filter by title, author, keyword…" autocomplete="off">
+      </label>
+      <span class="fieldsbtn">
+        <button class="ghost" id="fieldsBtn" aria-expanded="false"
+                title="Choose subspecialties and study designs">Filters<span class="count" id="fieldsCount"></span></button>
+        <div class="picker" id="fieldsPicker" hidden></div>
+      </span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="stats" id="stats"></div>
+  <div class="savedbar" id="savedBar" hidden>
+    <span>Export your saved papers</span>
+    <button class="linkbtn" data-export="ris">RIS</button>
+    <button class="linkbtn" data-export="bib">BibTeX</button>
+    <button class="linkbtn" data-export="clear">Clear all</button>
+  </div>
+  <div id="banners"></div>
+  <main id="feed"></main>
+  <footer>
+    <div class="fcontrols">
+      <span class="theme" id="theme" role="group" aria-label="Appearance"><span class="lbl">Appearance</span>
+        <button data-theme-set="auto">Auto</button><button data-theme-set="light">Light</button><button data-theme-set="dark">Dark</button>
+      </span>
+      <button class="linkbtn" id="refresh">Refresh now</button>
+      <button class="linkbtn" id="editProfile">Edit your interests</button>
+    </div>
+    <p class="fnote">
+      Sources: <a href="https://api.crossref.org" target="_blank" rel="noopener">Crossref REST API</a> ·
+      <a href="https://www.ncbi.nlm.nih.gov/books/NBK25501/" target="_blank" rel="noopener">NCBI E-utilities</a>.
+      Summaries are extractive (pulled from the abstract's own conclusion), not generated —
+      always read the paper. Study designs are tagged by rule from NLM publication types and
+      cue phrases; a dashed tag ending in “?” is a low-confidence guess, and hovering any tag
+      shows the cue it matched. <span id="gen"></span>
+    </p>
+  </footer>
+</div>
+
+<script>
+const FEED = /*__ORTHOBRIEF_DATA__*/null;
+// Populated only by `app.py --snapshot`: every window pre-fetched, so the file
+// works from file:// with no server behind it.
+const SNAPSHOT = /*__ORTHOBRIEF_SNAPSHOT__*/null;
+// The field taxonomy, always injected — the picker has to be able to draw
+// itself before any papers have arrived.
+const FIELDS_META = /*__ORTHOBRIEF_FIELDS__*/[];
+// A cold server sends the shell without a feed so the page paints immediately;
+// the papers are fetched right after. Everything downstream must survive it.
+const EMPTY_FEED = {
+  window: {days: 1, start: "", end: ""},
+  counts: {crossref: 0, pubmed: 0, journals: 0, with_abstract: 0, total: 0},
+  fields: [], study_types: [], errors: [], papers: [],
+};
+
+
+/* Which subspecialties the reader follows. Everything is on until they say
+   otherwise — the point of the site is breadth, and the picker is right there. */
+const ALL_FIELDS = FIELDS_META.map(f => f.key);
+// `template.html` is re-read on every request but the Python is not, so a
+// server started before a template change serves this page with its new tokens
+// unfilled. That used to leave zero known fields and therefore zero papers.
+const SERVER_STALE = !SNAPSHOT && !FIELDS_META.length;
+function loadFields(){
+  try{
+    const saved = JSON.parse(localStorage.getItem("orthobrief.fields") || "null");
+    if(Array.isArray(saved) && saved.length) return saved.filter(k => ALL_FIELDS.includes(k));
+  }catch(_){}
+  return ALL_FIELDS.slice();
+}
+function saveFields(keys){
+  try{ localStorage.setItem("orthobrief.fields", JSON.stringify(keys)); }catch(_){}
+}
+
+const FIELD_LABEL = Object.fromEntries(FIELDS_META.map(f => [f.key, f.label]));
+
+let state = { feed: FEED || EMPTY_FEED, days: 1, q: "", type: "", view: "all",
+              fields: loadFields(), error: "", loading: false };
+
+/* ---------- helpers ---------- */
+/* A DOI may legally contain #, ? or & — SAGE deposits reply/comment DOIs like
+   "10.1177/17531934261463150#sub1-…". Dropped into a URL raw, the browser cuts
+   at the # and silently resolves the *parent* article instead, so the link
+   opens the wrong paper. Encode everything except the path separator. */
+const doiUrl = d => "https://doi.org/" + encodeURIComponent(String(d)).replace(/%2F/gi, "/");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+
+function fmtDate(iso){
+  if(!iso) return "";
+  const d = new Date(iso + "T12:00:00");
+  if(isNaN(d)) return iso;
+  return d.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
+}
+
+function relDay(iso){
+  if(!iso) return "";
+  const today = new Date(); today.setHours(0,0,0,0);
+  const d = new Date(iso + "T12:00:00"); d.setHours(0,0,0,0);
+  const diff = Math.round((today - d) / 86400000);
+  if(diff === 0) return "today";
+  if(diff === 1) return "yesterday";
+  if(diff > 1 && diff < 14) return diff + " days ago";
+  return fmtDate(iso);
+}
+
+/* Renders a structured abstract with its section labels styled. */
+function renderAbstract(a){
+  if(!a) return "";
+  const parts = a.split(/\b([A-Z][A-Z /&'\-]{2,}?)\s*:\s+/g);
+  if(parts.length < 3) return esc(a);
+  let out = parts[0] ? esc(parts[0]) : "";
+  for(let i = 1; i < parts.length; i += 2){
+    out += `<span class="sec">${esc(parts[i])}</span>${esc(parts[i+1] || "")}`;
+  }
+  return out;
+}
+
+/* ---------- rendering ---------- */
+function paperCard(p){
+  /* A DOI the registry has never heard of is worse than no link at all — it
+     sends you to "DOI NOT FOUND". Show the string, drop the link, and point at
+     PubMed instead, which always resolves. */
+  /* In For you, a paper has to be able to say why it's near the top. */
+  const reasons = state.view === "foryou" ? scoreFor(p) : {score: 0, why: []};
+  const whyHtml = reasons.why.length
+    ? `<div class="why">Matches ${esc(reasons.why.slice(0, 3).join(" · "))}</div>` : "";
+  const doiDead = p.doi && p.doi_ok === false;
+  const doiHtml = !p.doi
+    ? `<span class="doi" style="opacity:.6">no DOI yet</span>`
+    : doiDead
+    ? `<span class="doi dead" title="This DOI is not registered in the DOI system — the publisher supplied it, but it was never deposited. Use the PubMed link.">doi:${esc(p.doi)} · unregistered</span>`
+    : `<a class="doi" href="${esc(doiUrl(p.doi))}" target="_blank" rel="noopener">doi:${esc(p.doi)}</a>
+       <button class="copy" data-doi="${esc(p.doi)}">copy</button>`;
+  const pm = p.pmid
+    ? `<a class="doi" href="https://pubmed.ncbi.nlm.nih.gov/${esc(p.pmid)}/" target="_blank" rel="noopener">PMID ${esc(p.pmid)}</a>`
+    : "";
+
+  const st = p.study;
+  const labels = ((p.fields || {}).all || []).map(k => FIELD_LABEL[k] || k);
+  const fieldHtml = labels.length
+    ? `<span class="field" title="Subspecialty${labels.length > 1 ? " (this paper is in more than one)" : ""}">${
+        esc(labels.join(" · "))}</span>`
+    : "";
+  const studyHtml = st
+    ? `<span class="study ${st.confidence === "low" ? "unsure" : ""}" data-k="${esc(st.key)}"
+             title="${esc(st.confidence)} confidence — matched ${esc(st.why || "nothing")}"
+        ><i class="swatch"></i>${esc(st.label)}${st.confidence === "low" ? "?" : ""}</span>`
+    : "";
+
+  return `
+  <article class="card">
+    <div class="meta">
+      ${isNew(p) ? `<span class="isnew" title="Not in the feed last time you looked">New</span>` : ""}
+      ${studyHtml}
+      <span class="badge">${esc(p.journal || "Unknown journal")}</span>
+      ${fieldHtml}
+      <span class="date">${esc(relDay(p.date))}</span>
+    </div>
+    <h2><a href="${esc(p.url || "#")}" target="_blank" rel="noopener">${esc(p.title)}</a></h2>
+    ${p.authors_short ? `<div class="authors">${esc(p.authors_short)}</div>` : ""}
+    ${whyHtml}
+    ${p.summary ? `<div class="tldr"><span class="lbl">Summary</span><p>${esc(p.summary)}</p></div>` : ""}
+    ${p.abstract
+      ? `<details class="abs"><summary>Full abstract</summary>
+           <div class="abs-body">${renderAbstract(p.abstract)}</div>
+         </details>`
+      : state.feed.public
+      ? `<p class="no-abs"><a href="${esc(p.url || "#")}" target="_blank" rel="noopener">Read the abstract at the source →</a></p>`
+      : `<p class="no-abs">No abstract deposited yet — publishers often add it a few days after the DOI.</p>`}
+    <div class="foot">
+      <button class="save${isSaved(p) ? " on" : ""}" data-save="${esc(paperId(p))}"
+              aria-pressed="${isSaved(p)}">${isSaved(p) ? "★ Saved" : "☆ Save"}</button>
+      ${doiHtml}${pm}
+      <span class="src">${esc((p.sources || []).join(" + "))}</span>
+    </div>
+  </article>`;
+}
+
+/* Papers in the reader's chosen fields — the base every other count is of. */
+function inScope(){
+  const base = state.view === "saved" ? savedPapers() : (state.feed.papers || []);
+  const pool = state.view === "new" ? base.filter(isNew) : base;
+  if(state.view === "foryou"){
+    // Ranked, not filtered: everything is still here, the order changed.
+    return pool.slice().sort((a, b) => (scoreFor(b).score - scoreFor(a).score)
+      || String(b.date || "").localeCompare(String(a.date || "")));
+  }
+  if(!ALL_FIELDS.length) return pool;                      // nothing to filter by
+  const sel = new Set(state.fields);
+  return pool.filter(p => ((p.fields || {}).all || []).some(k => sel.has(k)));
+}
+
+/* `skipType` gives the chip row its counts: how many papers each design would
+   have once the search and journal filters apply, but before the type filter. */
+function visible(skipType){
+  const q = state.q.trim().toLowerCase();
+  return inScope().filter(p => {
+    if(!skipType && state.type && (p.study || {}).key !== state.type) return false;
+    if(!q) return true;
+    return (p.title + " " + (p.authors || []).join(" ") + " " + (p.abstract || "") + " " +
+            p.journal + " " + ((p.study || {}).label || ""))
+      .toLowerCase().includes(q);
+  });
+}
+
+function renderFieldsPicker(){
+  const fcounts = Object.fromEntries((state.feed.fields || []).map(f => [f.key, f.n]));
+  const sel = new Set(state.fields);
+  const pool = visible(true);
+  const tally = {};
+  pool.forEach(p => { const k = (p.study || {}).key || "other"; tally[k] = (tally[k] || 0) + 1; });
+  const designs = (state.feed.study_types || []).filter(t => tally[t.key]);
+
+  const narrowed = (sel.size && sel.size < FIELDS_META.length ? 1 : 0) + (state.type ? 1 : 0);
+  document.getElementById("fieldsBtn").parentElement.hidden = !FIELDS_META.length;
+  document.getElementById("fieldsCount").textContent = narrowed ? String(narrowed) : "";
+  document.getElementById("fieldsCount").hidden = !narrowed;
+
+  document.getElementById("fieldsPicker").innerHTML = `
+    <div class="sect">
+      <div class="secthead"><h4>Subspecialty</h4>
+        <button data-pick="${sel.size === FIELDS_META.length ? "none" : "all"}">${
+          sel.size === FIELDS_META.length ? "Clear" : "Select all"}</button></div>
+      ${FIELDS_META.map(f => `
+        <label>
+          <input type="checkbox" value="${esc(f.key)}"${sel.has(f.key) ? " checked" : ""}>
+          <span class="txt">${esc(f.label)}</span>
+          <span class="n">${fcounts[f.key] === undefined ? "" : fcounts[f.key]}</span>
+        </label>`).join("")}
+    </div>
+    <div class="sect">
+      <div class="secthead"><h4>Study design</h4></div>
+      <label class="design"><input type="radio" name="design" value=""${state.type ? "" : " checked"}>
+        <span class="txt">Any design</span><span class="n">${pool.length}</span></label>
+      ${designs.map(t => `
+        <label class="design">
+          <input type="radio" name="design" value="${esc(t.key)}"${state.type === t.key ? " checked" : ""}>
+          <span class="txt" data-k="${esc(t.key)}"><i class="swatch"></i>${esc(t.label)}</span>
+          <span class="n">${tally[t.key]}</span>
+        </label>`).join("")}
+    </div>`;
+}
+
+function renderViewCounts(){
+  const newN = (state.feed.papers || []).filter(isNew).length;
+  const savedN = Object.keys(SAVED).length;
+  document.getElementById("newCount").textContent = newN ? ` ${newN}` : "";
+  document.getElementById("savedCount").textContent = savedN ? ` ${savedN}` : "";
+  [...document.querySelectorAll("#viewPills button")].forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.view === state.view)));
+  document.getElementById("windowPills").hidden = state.view === "saved";
+  document.getElementById("savedBar").hidden = state.view !== "saved" || !savedN;
+}
+
+function render(){
+  markSeen(state.feed.papers || []);
+  const f = state.feed, scope = inScope(), papers = visible();
+  renderFieldsPicker();
+
+  renderViewCounts();
+
+  const end = new Date((f.window.end || new Date().toISOString().slice(0, 10)) + "T12:00:00");
+  document.getElementById("datestamp").innerHTML =
+    `<b>${end.toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric",year:"numeric"})}</b>` +
+    (f.window.days > 1 ? `<br>window: ${fmtDate(f.window.start)} → ${fmtDate(f.window.end)}` : "");
+
+  document.getElementById("stats").innerHTML =
+    `<span>${papers.length}${papers.length !== scope.length ? ` of ${scope.length}` : ""} paper${
+      papers.length === 1 ? "" : "s"}${state.view === "new" ? " new since your last visit"
+      : state.view === "saved" ? " saved" : ""}</span>`;
+
+  document.getElementById("banners").innerHTML =
+    (SERVER_STALE ? `<div class="banner">The running OrthoBrief server is older than this
+       page, so the field picker is empty and filtering is off. Restart it:
+       stop <code>python3 app.py</code> with Ctrl-C and start it again.</div>` : "") +
+    (state.error ? `<div class="banner">${esc(state.error)}</div>` : "") +
+    (f.errors || []).map(e => `<div class="banner">${esc(e)}</div>`).join("");
+
+
+  document.getElementById("gen").textContent =
+    (f.generated_at ? "Fetched " + f.generated_at.replace("T", " ") + ". " : "") +
+    (state.feed.public
+      ? "Abstracts stay with their publishers — follow any paper's link to read it in full."
+      : SNAPSHOT ? "Offline snapshot — regenerate with `python3 app.py --snapshot`." : "");
+
+  if(SNAPSHOT){
+    const btn = document.getElementById("refresh");
+    btn.disabled = true;
+    btn.style.opacity = .45;
+    btn.style.cursor = "default";
+    btn.title = "Offline snapshot — run the server to re-query the APIs";
+  }
+
+  const feedEl = document.getElementById("feed");
+  if(!papers.length){
+    feedEl.innerHTML = `
+      <div class="empty">
+        <h3>${
+          state.view === "saved" ? "Nothing saved yet"
+          : state.view === "new" && f.papers.length ? "Nothing new since your last visit"
+          : state.error ? "Nothing loaded"
+          : !f.papers.length ? "No papers in this window"
+          : (!state.fields.length && ALL_FIELDS.length) ? "No fields selected"
+          : scope.length ? "Nothing matches that filter"
+          : "No papers yet in these fields"}</h3>
+        <p>${
+          state.view === "saved" ? "Star a paper with ☆ Save and it stays here — across windows, and after it drops out of the feed."
+          : state.view === "new" && f.papers.length ? "You're caught up. Widen the window, or come back tomorrow."
+          : state.error ? "See the message above."
+          : !f.papers.length
+          ? "Journals publish in bursts, and most drop new issues on weekday mornings (US/EU time). Try a wider window."
+          : (!state.fields.length && ALL_FIELDS.length)
+          ? "Open Fields and pick at least one part of orthopaedics to follow."
+          : scope.length
+          ? "Try clearing the search box, or picking a different design or journal."
+          : "Nothing in your fields this window — widen the window, or add fields."}</p>
+      </div>`;
+    return;
+  }
+  feedEl.innerHTML = papers.map(paperCard).join("");
+}
+
+/* ---------- data ---------- */
+async function load(days, force){
+  if(SNAPSHOT){                       // offline file: swap in a pre-fetched window
+    state.feed = SNAPSHOT[String(days)] || state.feed;
+    state.days = days;
+    render();
+    return;
+  }
+  state.loading = true;
+  document.body.classList.add("loading");
+  document.getElementById("feed").innerHTML =
+    `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
+  try{
+    const r = await fetch(`/api/papers?days=${days}` + (force ? "&refresh=1" : ""));
+    state.feed = await r.json();
+    state.days = days;
+    state.error = "";
+  }catch(e){
+    state.error = location.protocol === "file:"
+      ? "This page has no papers in it and can't fetch any from a file:// URL. "
+        + "Run `python3 app.py` and open http://localhost:8087, or generate a "
+        + "standalone copy with `python3 app.py --snapshot`."
+      : `Could not reach the OrthoBrief server (${e.message}). Is \`python3 app.py\` still running?`;
+  }finally{
+    state.loading = false;
+    document.body.classList.remove("loading");
+    render();
+  }
+}
+
+/* ---------- events ---------- */
+document.getElementById("viewPills").addEventListener("click", e => {
+  const b = e.target.closest("button[data-view]");
+  if(!b) return;
+  state.view = b.dataset.view;
+  render();
+});
+document.getElementById("savedBar").addEventListener("click", e => {
+  const b = e.target.closest("button[data-export]");
+  if(!b) return;
+  const papers = savedPapers();
+  const stamp = new Date().toISOString().slice(0, 10);
+  if(b.dataset.export === "ris") download(`orthobrief-${stamp}.ris`, toRIS(papers));
+  else if(b.dataset.export === "bib") download(`orthobrief-${stamp}.bib`, toBibTeX(papers));
+  else if(confirm(`Remove all ${papers.length} saved papers?`)){
+    SAVED = {}; saveStore(SAVED_KEY, SAVED); state.view = "all"; render();
+  }
+});
+/* Opening an abstract is a weaker vote than saving, but it is a vote. */
+document.getElementById("feed").addEventListener("toggle", e => {
+  if(!e.target.matches("details.abs") || !e.target.open) return;
+  const card = e.target.closest(".card");
+  const id = card && card.querySelector("[data-save]")?.dataset.save;
+  const p = id && (state.feed.papers || []).find(x => paperId(x) === id);
+  if(p) learnFrom(p, LEARN.open);
+}, true);
+
+document.getElementById("feed").addEventListener("click", e => {
+  const b = e.target.closest("button[data-save]");
+  if(!b) return;
+  const id = b.dataset.save;
+  const all = [...(state.feed.papers || []), ...savedPapers()];
+  const paper = all.find(p => paperId(p) === id);
+  if(paper) toggleSave(paper, b);
+});
+document.getElementById("windowPills").addEventListener("click", e => {
+  const b = e.target.closest("button[data-days]");
+  if(!b) return;
+  [...e.currentTarget.children].forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  load(Number(b.dataset.days), false);
+});
+document.getElementById("refresh").addEventListener("click", () => load(state.days, true));
+document.getElementById("q").addEventListener("input", e => { state.q = e.target.value; render(); });
+document.addEventListener("click", e => {
+  const b = e.target.closest(".copy");
+  if(!b) return;
+  navigator.clipboard.writeText(b.dataset.doi).then(() => {
+    b.textContent = "copied"; b.classList.add("done");
+    setTimeout(() => { b.textContent = "copy"; b.classList.remove("done"); }, 1400);
+  });
+});
+/* ---------- profile ---------- */
+/* Everything that makes the feed yours: what you do, what you follow, what
+   you're chasing, and what the app has learned from watching you use it.
+   One object, on the device. Swapping localStorage for a server later means
+   changing loadProfile/saveProfile and nothing else. */
+const PROFILE_KEY = "orthobrief.profile";
+const DEFAULT_PROFILE = {
+  onboarded: false, role: "", fields: [], keywords: [], weights: {}, made: "",
+};
+function loadProfile(){
+  try{ return {...DEFAULT_PROFILE, ...(JSON.parse(localStorage.getItem(PROFILE_KEY) || "{}"))}; }
+  catch(_){ return {...DEFAULT_PROFILE}; }
+}
+function saveProfile(){ try{ localStorage.setItem(PROFILE_KEY, JSON.stringify(PROFILE)); }catch(_){} }
+let PROFILE = loadProfile();
+
+/* Roles differ in what they're reading *for*, which is a better default than
+   asking everyone to tick ten boxes on their first visit. */
+const ROLES = [
+  {key: "student",   label: "Medical student",   hint: "Exploring the specialty"},
+  {key: "resident",  label: "Resident",          hint: "Clinical reading, journal club"},
+  {key: "fellow",    label: "Fellow",            hint: "One subspecialty, in depth"},
+  {key: "attending", label: "Attending",         hint: "Keeping current in practice"},
+  {key: "research",  label: "Researcher",        hint: "Methods and gaps, all fields"},
+];
+
+/* ---------- tailoring ---------- */
+/* Two rules held throughout: this **ranks, it never hides** — missing a paper
+   is the one failure a literature tool cannot afford — and every score can be
+   explained in words on the card that carries it. */
+const LEARN = {save: 3, open: 1, cap: 24};
+
+function bump(key, by){
+  const w = PROFILE.weights;
+  w[key] = Math.max(-LEARN.cap, Math.min(LEARN.cap, (w[key] || 0) + by));
+  saveProfile();
+}
+function learnFrom(p, by){
+  const st = (p.study || {}).key, j = p.journal || "";
+  ((p.fields || {}).all || []).forEach(k => bump("field:" + k, by));
+  if(st) bump("design:" + st, by);
+  if(j) bump("journal:" + j, by);
+}
+
+function scoreFor(p){
+  const why = [];
+  let score = 0;
+  const chosen = new Set(PROFILE.fields.length ? PROFILE.fields : state.fields);
+  ((p.fields || {}).all || []).forEach(k => {
+    if(chosen.has(k)){ score += 3; why.push(FIELD_LABEL[k] || k); }
+  });
+  const hay = `${p.title || ""} ${p.abstract || ""}`.toLowerCase();
+  (PROFILE.keywords || []).forEach(kw => {
+    if(kw && hay.includes(kw.toLowerCase())){ score += 6; why.push(`“${kw}”`); }
+  });
+  const w = PROFILE.weights || {};
+  const learned = ((p.fields || {}).all || []).reduce((a, k) => a + (w["field:" + k] || 0), 0)
+    + (w["design:" + ((p.study || {}).key || "")] || 0)
+    + (w["journal:" + (p.journal || "")] || 0);
+  if(learned) why.push(learned > 0 ? "papers like ones you saved" : "");
+  return {score: score + learned * 0.6, why: why.filter(Boolean)};
+}
+
+/* ---------- reading state ---------- */
+/* Two things live on the device: which papers you have already been shown, and
+   which you kept. Both are keyed by DOI (falling back to PMID, then title) so a
+   paper keeps its identity across windows and refetches. */
+const paperId = p =>
+  p.doi ? "d:" + p.doi : p.pmid ? "p:" + p.pmid
+  : "t:" + String(p.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 60);
+
+function loadStore(key){
+  try{ return JSON.parse(localStorage.getItem(key) || "{}") || {}; }catch(_){ return {}; }
+}
+function saveStore(key, obj){
+  try{ localStorage.setItem(key, JSON.stringify(obj)); }catch(_){}
+}
+
+const SEEN_KEY = "orthobrief.seen", SAVED_KEY = "orthobrief.saved";
+const SEEN_DAYS = 60;                        // long enough for any window
+let SEEN = loadStore(SEEN_KEY);
+let SAVED = loadStore(SAVED_KEY);
+/* Ids that were unseen when this session started. Held for the whole session so
+   the "new" marks don't evaporate out from under you as you read. */
+const NEW_IDS = new Set();
+
+function markSeen(papers){
+  const today = Math.floor(Date.now() / 86400000);
+  let dirty = false;
+  papers.forEach(p => {
+    const id = paperId(p);
+    if(SEEN[id] === undefined){ NEW_IDS.add(id); dirty = true; }
+    if(SEEN[id] !== today){ SEEN[id] = today; dirty = true; }
+  });
+  if(dirty){
+    for(const [id, day] of Object.entries(SEEN))
+      if(today - day > SEEN_DAYS && !NEW_IDS.has(id)) delete SEEN[id];
+    saveStore(SEEN_KEY, SEEN);
+  }
+}
+
+const isNew = p => NEW_IDS.has(paperId(p));
+const isSaved = p => !!SAVED[paperId(p)];
+
+/* Saved papers outlive the window they were found in, so the record has to
+   carry enough of the paper to render and to cite without the feed. */
+function toggleSave(p, btn){
+  const id = paperId(p);
+  if(SAVED[id]) delete SAVED[id];
+  else SAVED[id] = {
+    doi: p.doi || "", doi_ok: p.doi_ok, pmid: p.pmid || "", title: p.title || "",
+    journal: p.journal || "", date: p.date || "", url: p.url || "",
+    authors: p.authors || [], authors_short: p.authors_short || "",
+    fields: p.fields || {all: []}, study: p.study || null, saved_at: new Date().toISOString(),
+  };
+  saveStore(SAVED_KEY, SAVED);
+  learnFrom(p, SAVED[id] ? LEARN.save : -LEARN.save);   // un-saving is a signal too
+  // Re-rendering the whole list here would collapse any abstract the reader has
+  // open, so only the saved view — where membership actually changes — reloads.
+  if(state.view === "saved" || !btn) return render();
+  const on = !!SAVED[id];
+  btn.classList.toggle("on", on);
+  btn.setAttribute("aria-pressed", String(on));
+  btn.textContent = on ? "★ Saved" : "☆ Save";
+  renderViewCounts();
+}
+
+/* The current feed's copy is richer (summary, abstract), so prefer it and fall
+   back to the stored record for anything outside the window. */
+function savedPapers(){
+  const live = new Map((state.feed.papers || []).map(p => [paperId(p), p]));
+  return Object.entries(SAVED)
+    .sort((a, b) => (b[1].saved_at || "").localeCompare(a[1].saved_at || ""))
+    .map(([id, rec]) => live.get(id) || rec);
+}
+
+/* ---------- citation export ---------- */
+const _riEsc = v => String(v || "").replace(/\r?\n/g, " ").trim();
+
+function toRIS(papers){
+  return papers.map(p => {
+    const L = ["TY  - JOUR", `TI  - ${_riEsc(p.title)}`];
+    (p.authors || []).forEach(a => L.push(`AU  - ${_riEsc(a)}`));
+    if(p.journal) L.push(`JO  - ${_riEsc(p.journal)}`);
+    if(p.date){ L.push(`PY  - ${p.date.slice(0, 4)}`); L.push(`DA  - ${p.date}`); }
+    if(p.doi) L.push(`DO  - ${_riEsc(p.doi)}`);
+    if(p.pmid) L.push(`AN  - ${_riEsc(p.pmid)}`);
+    if(p.url) L.push(`UR  - ${_riEsc(p.url)}`);
+    if(p.abstract) L.push(`AB  - ${_riEsc(p.abstract)}`);
+    L.push("ER  - ");
+    return L.join("\n");
+  }).join("\n\n") + "\n";
+}
+
+function toBibTeX(papers){
+  const used = {};
+  return papers.map(p => {
+    const last = String((p.authors || [])[0] || "anon").split(/\s+/).pop().toLowerCase();
+    const year = (p.date || "").slice(0, 4) || "nd";
+    const word = String(p.title || "ref").toLowerCase().replace(/[^a-z0-9 ]/g, "")
+      .split(/\s+/).find(w => w.length > 3) || "ref";
+    let key = `${last}${year}${word}`.replace(/[^a-z0-9]/g, "");
+    used[key] = (used[key] || 0) + 1;
+    if(used[key] > 1) key += String.fromCharCode(96 + used[key]);
+    const f = [];
+    // Braces round the title keep the journal's capitalisation intact.
+    if(p.title) f.push(`  title = {{${_riEsc(p.title)}}}`);
+    if((p.authors || []).length) f.push(`  author = {${p.authors.map(_riEsc).join(" and ")}}`);
+    if(p.journal) f.push(`  journal = {${_riEsc(p.journal)}}`);
+    if(year !== "nd") f.push(`  year = {${year}}`);
+    if(p.doi) f.push(`  doi = {${_riEsc(p.doi)}}`);
+    if(p.pmid) f.push(`  pmid = {${_riEsc(p.pmid)}}`);
+    return `@article{${key},\n${f.join(",\n")}\n}`;
+  }).join("\n\n") + "\n";
+}
+
+function download(name, text){
+  const blob = new Blob([text], {type: "text/plain;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+/* ---------- onboarding ---------- */
+/* Three questions, none of them required. The aim is a feed that is already
+   yours on the first screen, not a form to complete. */
+const SUGGESTED_KW = ["robotic", "periprosthetic joint infection", "ACL", "rotator cuff",
+  "cartilage", "machine learning", "opioid", "cost", "registry", "nonunion",
+  "reverse shoulder", "scoliosis", "return to sport", "outpatient"];
+let obStep = 0, obDraft = null;
+
+function obOpen(){
+  obDraft = {role: PROFILE.role, fields: PROFILE.fields.slice(), keywords: PROFILE.keywords.slice()};
+  if(!obDraft.fields.length) obDraft.fields = ALL_FIELDS.slice();
+  obStep = 0;
+  document.getElementById("onboard").hidden = false;
+  obRender();
+}
+function obClose(saveIt){
+  if(saveIt){
+    PROFILE.onboarded = true;
+    PROFILE.role = obDraft.role;
+    PROFILE.fields = obDraft.fields;
+    PROFILE.keywords = obDraft.keywords;
+    PROFILE.made = PROFILE.made || new Date().toISOString();
+    saveProfile();
+    state.fields = obDraft.fields.length ? obDraft.fields.slice() : ALL_FIELDS.slice();
+    saveFields(state.fields);
+    if(PROFILE.keywords.length || PROFILE.role) state.view = "foryou";
+  }else{
+    PROFILE.onboarded = true;                    // asked once, never nag
+    saveProfile();
+  }
+  document.getElementById("onboard").hidden = true;
+  render();
+}
+
+function obRender(){
+  const counts = Object.fromEntries((state.feed.fields || []).map(f => [f.key, f.n]));
+  const body = document.getElementById("obBody");
+  if(obStep === 0){
+    body.innerHTML = `
+      <h2 id="obTitle">What brings you to the literature?</h2>
+      <p class="sub">This only sets sensible defaults — you can change everything later.</p>
+      <div class="ob-opts">${ROLES.map(r => `
+        <button class="ob-opt" data-role="${esc(r.key)}" aria-pressed="${obDraft.role === r.key}">
+          <span>${esc(r.label)}</span><span class="hint">${esc(r.hint)}</span>
+        </button>`).join("")}</div>`;
+  }else if(obStep === 1){
+    body.innerHTML = `
+      <h2 id="obTitle">Which parts of orthopaedics?</h2>
+      <p class="sub">Counts are today's papers. Pick as many as you like — nothing gets
+        hidden permanently, this just decides what leads.</p>
+      <div class="ob-opts two">${FIELDS_META.map(f => `
+        <button class="ob-opt" data-field="${esc(f.key)}" aria-pressed="${obDraft.fields.includes(f.key)}">
+          <span>${esc(f.label)}</span><span class="n">${counts[f.key] === undefined ? "" : counts[f.key]}</span>
+        </button>`).join("")}</div>`;
+  }else{
+    body.innerHTML = `
+      <h2 id="obTitle">Anything you're chasing?</h2>
+      <p class="sub">Topics, techniques, a project you're working on. Papers matching these
+        rise to the top of <b>For you</b> — and they're only a ranking, never a filter.</p>
+      <div class="ob-kw" id="obKw">${obDraft.keywords.map(k =>
+        `<button data-del="${esc(k)}">${esc(k)} ✕</button>`).join("")}</div>
+      <input class="ob-input" id="obInput" placeholder="e.g. periprosthetic joint infection — Enter to add" autocomplete="off">
+      <div class="ob-sug">${SUGGESTED_KW.filter(k => !obDraft.keywords.includes(k))
+        .slice(0, 8).map(k => `<button data-add="${esc(k)}">+ ${esc(k)}</button>`).join("")}</div>`;
+  }
+  document.getElementById("obDots").innerHTML = [0, 1, 2].map(i =>
+    `<i class="${i === obStep ? "on" : ""}"></i>`).join("");
+  const next = document.getElementById("obNext");
+  next.textContent = obStep === 2 ? "Start reading" : "Continue";
+  next.disabled = obStep === 1 && !obDraft.fields.length;
+  // The step redraws on every toggle, so put the cursor back where it was —
+  // otherwise adding a second keyword means reaching for the mouse again.
+  if(obStep === 2) document.getElementById("obInput").focus();
+}
+
+document.getElementById("obNext").addEventListener("click", () => {
+  if(obStep < 2){ obStep++; obRender(); } else obClose(true);
+});
+document.getElementById("obSkip").addEventListener("click", () => obClose(false));
+document.getElementById("editProfile").addEventListener("click", obOpen);
+document.getElementById("obBody").addEventListener("click", e => {
+  const role = e.target.closest("[data-role]");
+  if(role){
+    obDraft.role = obDraft.role === role.dataset.role ? "" : role.dataset.role;
+    // A researcher reads across the whole field; a fellow rarely does.
+    if(obDraft.role === "research") obDraft.fields = ALL_FIELDS.slice();
+    obRender(); return;
+  }
+  const fld = e.target.closest("[data-field]");
+  if(fld){
+    const k = fld.dataset.field;
+    obDraft.fields = obDraft.fields.includes(k)
+      ? obDraft.fields.filter(x => x !== k)
+      : ALL_FIELDS.filter(x => x === k || obDraft.fields.includes(x));
+    obRender(); return;
+  }
+  const add = e.target.closest("[data-add]"), del = e.target.closest("[data-del]");
+  if(add){ obDraft.keywords.push(add.dataset.add); obRender(); }
+  if(del){ obDraft.keywords = obDraft.keywords.filter(k => k !== del.dataset.del); obRender(); }
+});
+document.getElementById("obBody").addEventListener("keydown", e => {
+  if(e.target.id !== "obInput" || e.key !== "Enter") return;
+  e.preventDefault();
+  const v = e.target.value.trim();
+  if(v && !obDraft.keywords.includes(v)){ obDraft.keywords.push(v); obRender(); }
+});
+
+/* ---------- appearance ---------- */
+/* "auto" means follow the OS; anything else is an explicit override that has to
+   win over it, which is what the data-theme attribute does in the stylesheet. */
+function currentTheme(){
+  try{ return localStorage.getItem("orthobrief.theme") || "auto"; }catch(_){ return "auto"; }
+}
+function applyTheme(mode){
+  try{
+    if(mode === "auto"){ localStorage.removeItem("orthobrief.theme"); delete document.documentElement.dataset.theme; }
+    else{ localStorage.setItem("orthobrief.theme", mode); document.documentElement.dataset.theme = mode; }
+  }catch(_){
+    if(mode === "auto") delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = mode;
+  }
+  renderTheme();
+}
+function renderTheme(){
+  const now = currentTheme();
+  document.querySelectorAll("#theme button[data-theme-set]").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.themeSet === now)));
+}
+document.getElementById("theme").addEventListener("click", e => {
+  const b = e.target.closest("button[data-theme-set]");
+  if(b) applyTheme(b.dataset.themeSet);
+});
+renderTheme();
+
+/* ---------- fields picker ---------- */
+const picker = document.getElementById("fieldsPicker");
+const fieldsBtn = document.getElementById("fieldsBtn");
+function openPicker(open){
+  picker.hidden = !open;
+  fieldsBtn.setAttribute("aria-expanded", String(open));
+}
+fieldsBtn.addEventListener("click", e => { e.stopPropagation(); openPicker(picker.hidden); });
+picker.addEventListener("click", e => e.stopPropagation());
+document.addEventListener("click", () => openPicker(false));
+picker.addEventListener("change", e => {
+  if(e.target.type === "radio"){ state.type = e.target.value; render(); return; }
+  if(e.target.type !== "checkbox") return;
+  const on = new Set(state.fields);
+  e.target.checked ? on.add(e.target.value) : on.delete(e.target.value);
+  state.fields = ALL_FIELDS.filter(k => on.has(k));   // keep taxonomy order
+  saveFields(state.fields);
+  render();
+});
+picker.addEventListener("click", e => {
+  const b = e.target.closest("button[data-pick]");
+  if(!b) return;
+  state.fields = b.dataset.pick === "all" ? ALL_FIELDS.slice() : [];
+  saveFields(state.fields);
+  render();
+});
+
+document.addEventListener("keydown", e => {
+  if(e.key === "Escape") openPicker(false);
+  if(e.key === "/" && document.activeElement.tagName !== "INPUT"){
+    e.preventDefault(); document.getElementById("q").focus();
+  }
+});
+
+
+render();
+// No feed in the page means the server was still warming up — go get it. The
+// shell is already on screen, so this is a skeleton, not a blank window.
+if(!FEED && !SNAPSHOT) load(state.days, false);
+/* First visit: ask the three questions. Only once, and skippable. */
+if(!PROFILE.onboarded && FIELDS_META.length) obOpen();
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+# Fetched data and generated artefacts — rebuilt on every run.
+.cache/
+.cache.bak/
+public/
+orthobrief.html
+
+# Local HTTPS cert for localhost, generated on first run.
+.cert/
+
+__pycache__/
+*.pyc
+.DS_Store
