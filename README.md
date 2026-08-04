@@ -186,7 +186,40 @@ instant and never re-queries anything.
 ## Onboarding and tailoring
 
 First visit asks three skippable questions — what you do, which fields, anything
-you're chasing — and the answers drive a **For you** ordering. Type a project or
+you're chasing — and the answers drive a **For you** ordering.
+
+Pick **Student researcher** and you get a fourth: *who do you work with*. Search
+your PI, and OrthoBrief reads their recent PubMed record and starts your feed
+from their work — their subspecialties become your fields, the phrases that
+recur in their titles become your interests. Everything is editable on the next
+screen; it's a starting point, not a verdict.
+
+Two details make that step work rather than merely exist:
+
+- **Disambiguation by affiliation.** "Bedair H" is an MGH arthroplasty surgeon
+  *and* a clinical pathologist at Tanta University. Papers are grouped by where
+  that author worked, so you pick a person, not a name. Affiliation strings are
+  normalised first — one person writes "Columbia University", "Columbia
+  University Medical Center" and "Columbia University Irving…", which would
+  otherwise arrive as three different people.
+- **The lab's papers go through the feed's own field cues.** The classifier's
+  patterns are injected into the page from `app.py`, so a PI's back catalogue is
+  read by exactly the same rules as this morning's papers — one source of truth,
+  not a second implementation that drifts.
+
+Interests are the recurring phrases in their titles, with overlapping n-grams
+collapsed (otherwise "minimal clinically important difference" arrives as three
+fragments plus its own words) and the vocabulary every clinical paper shares
+filtered out. Real examples: *Kocher M → anterior cruciate, osteochondritis
+dissecans, ligament reconstruction*; *Lenke L → adult spinal, proximal
+junctional, deformity*.
+
+PubMed rather than OpenAlex, deliberately: the published page is a static file,
+so every visitor's search leaves their own browser. OpenAlex now meters usage
+and there'd be no shared cache to absorb it; E-utilities are free, unmetered and
+CORS-enabled. They do cap one IP at three requests a second — a whole hospital
+shares one address — so the lookup backs off and retries, and says so plainly if
+it still can't get through. Type a project or
 technique ("periprosthetic joint infection", "robotic") and matching papers rise.
 
 Two rules the ranking keeps:

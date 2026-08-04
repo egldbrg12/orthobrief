@@ -1331,6 +1331,10 @@ def _cache_write(days: int, feed: dict) -> None:
 DATA_TOKEN = "/*__ORTHOBRIEF_DATA__*/null"
 SNAPSHOT_TOKEN = "/*__ORTHOBRIEF_SNAPSHOT__*/null"
 FIELDS_TOKEN = "/*__ORTHOBRIEF_FIELDS__*/[]"
+# The field cues themselves, shipped to the browser so a PI's back catalogue is
+# classified by exactly the same rules as the feed. Python stays the one source
+# of truth; the page just receives the patterns.
+CUES_TOKEN = "/*__ORTHOBRIEF_CUES__*/[]"
 
 SNAPSHOT_WINDOWS = (1, 3, 7, 14)
 
@@ -1347,6 +1351,8 @@ def render_page(feed: dict | None, snapshot: dict | None = None) -> bytes:
         shell = fh.read()
     shell = shell.replace(FIELDS_TOKEN, _encode(
         [{"key": f["key"], "label": f["label"], "blurb": f["blurb"]} for f in FIELDS]))
+    shell = shell.replace(CUES_TOKEN, _encode(
+        [{"k": key, "w": weight, "p": pattern} for key, weight, pattern in _FIELD_CUES]))
     if feed is not None:
         shell = shell.replace(DATA_TOKEN, _encode(feed))
     if snapshot:

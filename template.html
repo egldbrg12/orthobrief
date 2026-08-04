@@ -214,327 +214,6 @@
   }
   /* A guessed design shouldn't read as certain as an NLM-tagged one. */
   .study.unsure{color:var(--ink-3);font-weight:400}
-
-  /* ---------- profile ---------- */
-/* Everything that makes the feed yours: what you do, what you follow, what
-   you're chasing, and what the app has learned from watching you use it.
-   One object, on the device. Swapping localStorage for a server later means
-   changing loadProfile/saveProfile and nothing else. */
-const PROFILE_KEY = "orthobrief.profile";
-const DEFAULT_PROFILE = {
-  onboarded: false, role: "", fields: [], keywords: [], weights: {}, made: "",
-};
-function loadProfile(){
-  try{ return {...DEFAULT_PROFILE, ...(JSON.parse(localStorage.getItem(PROFILE_KEY) || "{}"))}; }
-  catch(_){ return {...DEFAULT_PROFILE}; }
-}
-function saveProfile(){ try{ localStorage.setItem(PROFILE_KEY, JSON.stringify(PROFILE)); }catch(_){} }
-let PROFILE = loadProfile();
-
-/* Roles differ in what they're reading *for*, which is a better default than
-   asking everyone to tick ten boxes on their first visit. */
-const ROLES = [
-  {key: "student",   label: "Medical student",   hint: "Exploring the specialty"},
-  {key: "resident",  label: "Resident",          hint: "Clinical reading, journal club"},
-  {key: "fellow",    label: "Fellow",            hint: "One subspecialty, in depth"},
-  {key: "attending", label: "Attending",         hint: "Keeping current in practice"},
-  {key: "research",  label: "Researcher",        hint: "Methods and gaps, all fields"},
-];
-
-/* ---------- tailoring ---------- */
-/* Two rules held throughout: this **ranks, it never hides** — missing a paper
-   is the one failure a literature tool cannot afford — and every score can be
-   explained in words on the card that carries it. */
-const LEARN = {save: 3, open: 1, cap: 24};
-
-function bump(key, by){
-  const w = PROFILE.weights;
-  w[key] = Math.max(-LEARN.cap, Math.min(LEARN.cap, (w[key] || 0) + by));
-  saveProfile();
-}
-function learnFrom(p, by){
-  const st = (p.study || {}).key, j = p.journal || "";
-  ((p.fields || {}).all || []).forEach(k => bump("field:" + k, by));
-  if(st) bump("design:" + st, by);
-  if(j) bump("journal:" + j, by);
-}
-
-function scoreFor(p){
-  const why = [];
-  let score = 0;
-  const chosen = new Set(PROFILE.fields.length ? PROFILE.fields : state.fields);
-  ((p.fields || {}).all || []).forEach(k => {
-    if(chosen.has(k)){ score += 3; why.push(FIELD_LABEL[k] || k); }
-  });
-  const hay = `${p.title || ""} ${p.abstract || ""}`.toLowerCase();
-  (PROFILE.keywords || []).forEach(kw => {
-    if(kw && hay.includes(kw.toLowerCase())){ score += 6; why.push(`“${kw}”`); }
-  });
-  const w = PROFILE.weights || {};
-  const learned = ((p.fields || {}).all || []).reduce((a, k) => a + (w["field:" + k] || 0), 0)
-    + (w["design:" + ((p.study || {}).key || "")] || 0)
-    + (w["journal:" + (p.journal || "")] || 0);
-  if(learned) why.push(learned > 0 ? "papers like ones you saved" : "");
-  return {score: score + learned * 0.6, why: why.filter(Boolean)};
-}
-
-/* ---------- reading state ---------- */
-/* Two things live on the device: which papers you have already been shown, and
-   which you kept. Both are keyed by DOI (falling back to PMID, then title) so a
-   paper keeps its identity across windows and refetches. */
-const paperId = p =>
-  p.doi ? "d:" + p.doi : p.pmid ? "p:" + p.pmid
-  : "t:" + String(p.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 60);
-
-function loadStore(key){
-  try{ return JSON.parse(localStorage.getItem(key) || "{}") || {}; }catch(_){ return {}; }
-}
-function saveStore(key, obj){
-  try{ localStorage.setItem(key, JSON.stringify(obj)); }catch(_){}
-}
-
-const SEEN_KEY = "orthobrief.seen", SAVED_KEY = "orthobrief.saved";
-const SEEN_DAYS = 60;                        // long enough for any window
-let SEEN = loadStore(SEEN_KEY);
-let SAVED = loadStore(SAVED_KEY);
-/* Ids that were unseen when this session started. Held for the whole session so
-   the "new" marks don't evaporate out from under you as you read. */
-const NEW_IDS = new Set();
-
-function markSeen(papers){
-  const today = Math.floor(Date.now() / 86400000);
-  let dirty = false;
-  papers.forEach(p => {
-    const id = paperId(p);
-    if(SEEN[id] === undefined){ NEW_IDS.add(id); dirty = true; }
-    if(SEEN[id] !== today){ SEEN[id] = today; dirty = true; }
-  });
-  if(dirty){
-    for(const [id, day] of Object.entries(SEEN))
-      if(today - day > SEEN_DAYS && !NEW_IDS.has(id)) delete SEEN[id];
-    saveStore(SEEN_KEY, SEEN);
-  }
-}
-
-const isNew = p => NEW_IDS.has(paperId(p));
-const isSaved = p => !!SAVED[paperId(p)];
-
-/* Saved papers outlive the window they were found in, so the record has to
-   carry enough of the paper to render and to cite without the feed. */
-function toggleSave(p, btn){
-  const id = paperId(p);
-  if(SAVED[id]) delete SAVED[id];
-  else SAVED[id] = {
-    doi: p.doi || "", doi_ok: p.doi_ok, pmid: p.pmid || "", title: p.title || "",
-    journal: p.journal || "", date: p.date || "", url: p.url || "",
-    authors: p.authors || [], authors_short: p.authors_short || "",
-    fields: p.fields || {all: []}, study: p.study || null, saved_at: new Date().toISOString(),
-  };
-  saveStore(SAVED_KEY, SAVED);
-  learnFrom(p, SAVED[id] ? LEARN.save : -LEARN.save);   // un-saving is a signal too
-  // Re-rendering the whole list here would collapse any abstract the reader has
-  // open, so only the saved view — where membership actually changes — reloads.
-  if(state.view === "saved" || !btn) return render();
-  const on = !!SAVED[id];
-  btn.classList.toggle("on", on);
-  btn.setAttribute("aria-pressed", String(on));
-  btn.textContent = on ? "★ Saved" : "☆ Save";
-  renderViewCounts();
-}
-
-/* The current feed's copy is richer (summary, abstract), so prefer it and fall
-   back to the stored record for anything outside the window. */
-function savedPapers(){
-  const live = new Map((state.feed.papers || []).map(p => [paperId(p), p]));
-  return Object.entries(SAVED)
-    .sort((a, b) => (b[1].saved_at || "").localeCompare(a[1].saved_at || ""))
-    .map(([id, rec]) => live.get(id) || rec);
-}
-
-/* ---------- citation export ---------- */
-const _riEsc = v => String(v || "").replace(/\r?\n/g, " ").trim();
-
-function toRIS(papers){
-  return papers.map(p => {
-    const L = ["TY  - JOUR", `TI  - ${_riEsc(p.title)}`];
-    (p.authors || []).forEach(a => L.push(`AU  - ${_riEsc(a)}`));
-    if(p.journal) L.push(`JO  - ${_riEsc(p.journal)}`);
-    if(p.date){ L.push(`PY  - ${p.date.slice(0, 4)}`); L.push(`DA  - ${p.date}`); }
-    if(p.doi) L.push(`DO  - ${_riEsc(p.doi)}`);
-    if(p.pmid) L.push(`AN  - ${_riEsc(p.pmid)}`);
-    if(p.url) L.push(`UR  - ${_riEsc(p.url)}`);
-    if(p.abstract) L.push(`AB  - ${_riEsc(p.abstract)}`);
-    L.push("ER  - ");
-    return L.join("\n");
-  }).join("\n\n") + "\n";
-}
-
-function toBibTeX(papers){
-  const used = {};
-  return papers.map(p => {
-    const last = String((p.authors || [])[0] || "anon").split(/\s+/).pop().toLowerCase();
-    const year = (p.date || "").slice(0, 4) || "nd";
-    const word = String(p.title || "ref").toLowerCase().replace(/[^a-z0-9 ]/g, "")
-      .split(/\s+/).find(w => w.length > 3) || "ref";
-    let key = `${last}${year}${word}`.replace(/[^a-z0-9]/g, "");
-    used[key] = (used[key] || 0) + 1;
-    if(used[key] > 1) key += String.fromCharCode(96 + used[key]);
-    const f = [];
-    // Braces round the title keep the journal's capitalisation intact.
-    if(p.title) f.push(`  title = {{${_riEsc(p.title)}}}`);
-    if((p.authors || []).length) f.push(`  author = {${p.authors.map(_riEsc).join(" and ")}}`);
-    if(p.journal) f.push(`  journal = {${_riEsc(p.journal)}}`);
-    if(year !== "nd") f.push(`  year = {${year}}`);
-    if(p.doi) f.push(`  doi = {${_riEsc(p.doi)}}`);
-    if(p.pmid) f.push(`  pmid = {${_riEsc(p.pmid)}}`);
-    return `@article{${key},\n${f.join(",\n")}\n}`;
-  }).join("\n\n") + "\n";
-}
-
-function download(name, text){
-  const blob = new Blob([text], {type: "text/plain;charset=utf-8"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-}
-
-/* ---------- onboarding ---------- */
-/* Three questions, none of them required. The aim is a feed that is already
-   yours on the first screen, not a form to complete. */
-const SUGGESTED_KW = ["robotic", "periprosthetic joint infection", "ACL", "rotator cuff",
-  "cartilage", "machine learning", "opioid", "cost", "registry", "nonunion",
-  "reverse shoulder", "scoliosis", "return to sport", "outpatient"];
-let obStep = 0, obDraft = null;
-
-function obOpen(){
-  obDraft = {role: PROFILE.role, fields: PROFILE.fields.slice(), keywords: PROFILE.keywords.slice()};
-  if(!obDraft.fields.length) obDraft.fields = ALL_FIELDS.slice();
-  obStep = 0;
-  document.getElementById("onboard").hidden = false;
-  obRender();
-}
-function obClose(saveIt){
-  if(saveIt){
-    PROFILE.onboarded = true;
-    PROFILE.role = obDraft.role;
-    PROFILE.fields = obDraft.fields;
-    PROFILE.keywords = obDraft.keywords;
-    PROFILE.made = PROFILE.made || new Date().toISOString();
-    saveProfile();
-    state.fields = obDraft.fields.length ? obDraft.fields.slice() : ALL_FIELDS.slice();
-    saveFields(state.fields);
-    if(PROFILE.keywords.length || PROFILE.role) state.view = "foryou";
-  }else{
-    PROFILE.onboarded = true;                    // asked once, never nag
-    saveProfile();
-  }
-  document.getElementById("onboard").hidden = true;
-  render();
-}
-
-function obRender(){
-  const counts = Object.fromEntries((state.feed.fields || []).map(f => [f.key, f.n]));
-  const body = document.getElementById("obBody");
-  if(obStep === 0){
-    body.innerHTML = `
-      <h2 id="obTitle">What brings you to the literature?</h2>
-      <p class="sub">This only sets sensible defaults — you can change everything later.</p>
-      <div class="ob-opts">${ROLES.map(r => `
-        <button class="ob-opt" data-role="${esc(r.key)}" aria-pressed="${obDraft.role === r.key}">
-          <span>${esc(r.label)}</span><span class="hint">${esc(r.hint)}</span>
-        </button>`).join("")}</div>`;
-  }else if(obStep === 1){
-    body.innerHTML = `
-      <h2 id="obTitle">Which parts of orthopaedics?</h2>
-      <p class="sub">Counts are today's papers. Pick as many as you like — nothing gets
-        hidden permanently, this just decides what leads.</p>
-      <div class="ob-opts two">${FIELDS_META.map(f => `
-        <button class="ob-opt" data-field="${esc(f.key)}" aria-pressed="${obDraft.fields.includes(f.key)}">
-          <span>${esc(f.label)}</span><span class="n">${counts[f.key] === undefined ? "" : counts[f.key]}</span>
-        </button>`).join("")}</div>`;
-  }else{
-    body.innerHTML = `
-      <h2 id="obTitle">Anything you're chasing?</h2>
-      <p class="sub">Topics, techniques, a project you're working on. Papers matching these
-        rise to the top of <b>For you</b> — and they're only a ranking, never a filter.</p>
-      <div class="ob-kw" id="obKw">${obDraft.keywords.map(k =>
-        `<button data-del="${esc(k)}">${esc(k)} ✕</button>`).join("")}</div>
-      <input class="ob-input" id="obInput" placeholder="e.g. periprosthetic joint infection — Enter to add" autocomplete="off">
-      <div class="ob-sug">${SUGGESTED_KW.filter(k => !obDraft.keywords.includes(k))
-        .slice(0, 8).map(k => `<button data-add="${esc(k)}">+ ${esc(k)}</button>`).join("")}</div>`;
-  }
-  document.getElementById("obDots").innerHTML = [0, 1, 2].map(i =>
-    `<i class="${i === obStep ? "on" : ""}"></i>`).join("");
-  const next = document.getElementById("obNext");
-  next.textContent = obStep === 2 ? "Start reading" : "Continue";
-  next.disabled = obStep === 1 && !obDraft.fields.length;
-  // The step redraws on every toggle, so put the cursor back where it was —
-  // otherwise adding a second keyword means reaching for the mouse again.
-  if(obStep === 2) document.getElementById("obInput").focus();
-}
-
-document.getElementById("obNext").addEventListener("click", () => {
-  if(obStep < 2){ obStep++; obRender(); } else obClose(true);
-});
-document.getElementById("obSkip").addEventListener("click", () => obClose(false));
-document.getElementById("editProfile").addEventListener("click", obOpen);
-document.getElementById("obBody").addEventListener("click", e => {
-  const role = e.target.closest("[data-role]");
-  if(role){
-    obDraft.role = obDraft.role === role.dataset.role ? "" : role.dataset.role;
-    // A researcher reads across the whole field; a fellow rarely does.
-    if(obDraft.role === "research") obDraft.fields = ALL_FIELDS.slice();
-    obRender(); return;
-  }
-  const fld = e.target.closest("[data-field]");
-  if(fld){
-    const k = fld.dataset.field;
-    obDraft.fields = obDraft.fields.includes(k)
-      ? obDraft.fields.filter(x => x !== k)
-      : ALL_FIELDS.filter(x => x === k || obDraft.fields.includes(x));
-    obRender(); return;
-  }
-  const add = e.target.closest("[data-add]"), del = e.target.closest("[data-del]");
-  if(add){ obDraft.keywords.push(add.dataset.add); obRender(); }
-  if(del){ obDraft.keywords = obDraft.keywords.filter(k => k !== del.dataset.del); obRender(); }
-});
-document.getElementById("obBody").addEventListener("keydown", e => {
-  if(e.target.id !== "obInput" || e.key !== "Enter") return;
-  e.preventDefault();
-  const v = e.target.value.trim();
-  if(v && !obDraft.keywords.includes(v)){ obDraft.keywords.push(v); obRender(); }
-});
-
-/* ---------- appearance ---------- */
-/* "auto" means follow the OS; anything else is an explicit override that has to
-   win over it, which is what the data-theme attribute does in the stylesheet. */
-function currentTheme(){
-  try{ return localStorage.getItem("orthobrief.theme") || "auto"; }catch(_){ return "auto"; }
-}
-function applyTheme(mode){
-  try{
-    if(mode === "auto"){ localStorage.removeItem("orthobrief.theme"); delete document.documentElement.dataset.theme; }
-    else{ localStorage.setItem("orthobrief.theme", mode); document.documentElement.dataset.theme = mode; }
-  }catch(_){
-    if(mode === "auto") delete document.documentElement.dataset.theme;
-    else document.documentElement.dataset.theme = mode;
-  }
-  renderTheme();
-}
-function renderTheme(){
-  const now = currentTheme();
-  document.querySelectorAll("#theme button[data-theme-set]").forEach(b =>
-    b.setAttribute("aria-pressed", String(b.dataset.themeSet === now)));
-}
-document.getElementById("theme").addEventListener("click", e => {
-  const b = e.target.closest("button[data-theme-set]");
-  if(b) applyTheme(b.dataset.themeSet);
-});
-renderTheme();
-
-/* ---------- fields picker ---------- */
   .fieldsbtn{position:relative}
   .fieldsbtn .count{
     display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;
@@ -633,6 +312,12 @@ renderTheme();
     font:inherit;font-size:12.5px;padding:4px 9px;border-radius:999px;cursor:pointer;
   }
   .ob-sug button:hover{color:var(--ink);border-color:var(--ink-3)}
+  .pi-found{
+    margin-top:12px;padding:11px 13px;border-radius:11px;
+    background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 22%,transparent);
+    font-size:13px;line-height:1.55;color:var(--ink-2);
+  }
+  .pi-found b{color:var(--ink)}
   .ob-foot{display:flex;align-items:center;gap:12px;margin-top:20px;padding-top:14px;border-top:1px solid var(--line)}
   .ob-dots{display:flex;gap:5px;margin-right:auto}
   .ob-dots i{width:6px;height:6px;border-radius:50%;background:var(--line-2);display:block}
@@ -831,6 +516,10 @@ const SNAPSHOT = /*__ORTHOBRIEF_SNAPSHOT__*/null;
 // The field taxonomy, always injected — the picker has to be able to draw
 // itself before any papers have arrived.
 const FIELDS_META = /*__ORTHOBRIEF_FIELDS__*/[];
+// Same cue patterns the server classifies the feed with.
+const FIELD_CUES_JS = (/*__ORTHOBRIEF_CUES__*/[]).map(c => ({
+  k: c.k, w: c.w, re: new RegExp(c.p, "i"),
+}));
 // A cold server sends the shell without a feed so the page paints immediately;
 // the papers are fetched right after. Everything downstream must survive it.
 const EMPTY_FEED = {
@@ -1054,7 +743,9 @@ function render(){
   document.getElementById("stats").innerHTML =
     `<span>${papers.length}${papers.length !== scope.length ? ` of ${scope.length}` : ""} paper${
       papers.length === 1 ? "" : "s"}${state.view === "new" ? " new since your last visit"
-      : state.view === "saved" ? " saved" : ""}</span>`;
+      : state.view === "saved" ? " saved" : ""}</span>${
+      state.view === "foryou" && PROFILE.pi
+        ? `<span> · ranked from ${esc(PROFILE.pi.name)}'s recent work</span>` : ""}`;
 
   document.getElementById("banners").innerHTML =
     (SERVER_STALE ? `<div class="banner">The running OrthoBrief server is older than this
@@ -1211,8 +902,152 @@ const ROLES = [
   {key: "resident",  label: "Resident",          hint: "Clinical reading, journal club"},
   {key: "fellow",    label: "Fellow",            hint: "One subspecialty, in depth"},
   {key: "attending", label: "Attending",         hint: "Keeping current in practice"},
+  {key: "studentres",label: "Student researcher", hint: "Working in a lab — start from your PI"},
   {key: "research",  label: "Researcher",        hint: "Methods and gaps, all fields"},
 ];
+
+/* ---------- PI lookup ---------- */
+/* PubMed rather than OpenAlex: this page is a static file with no server behind
+   it, so every visitor's search goes straight out from their browser. PubMed's
+   E-utilities are free and unmetered (OpenAlex now meters, and there'd be no
+   shared cache to absorb it), and it's the same corpus the feed is built from,
+   so a PI's papers run through the very same field cues. */
+const EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils";
+const PI_MAX = 60;                            // recent papers to look at
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* NCBI allows three requests a second *per IP*, and a hospital puts its whole
+   staff behind one address — so throttling is a normal event here, not an edge
+   case. Back off and try again before admitting defeat. */
+async function eutils(path, params){
+  const url = `${EUTILS}/${path}?${new URLSearchParams({...params, tool: "orthobrief"})}`;
+  let last;
+  for(let attempt = 0; attempt < 3; attempt++){
+    if(attempt) await sleep(600 * attempt);
+    try{
+      const r = await fetch(url);
+      if(r.status === 429 || r.status >= 500){ last = new Error(`PubMed ${r.status}`); continue; }
+      if(!r.ok) throw new Error(`PubMed ${r.status}`);
+      return r;
+    }catch(err){ last = err; }
+  }
+  throw last || new Error("PubMed unreachable");
+}
+
+async function piSearch(name){
+  const es = await eutils("esearch.fcgi", {db: "pubmed", term: `${name}[Author]`,
+    retmax: PI_MAX, sort: "date", retmode: "json"});
+  const ids = ((await es.json()).esearchresult || {}).idlist || [];
+  if(!ids.length) return [];
+  await sleep(350);                            // stay under the 3/second ceiling
+  const ef = await eutils("efetch.fcgi", {db: "pubmed", id: ids.join(","), retmode: "xml"});
+  const xml = new DOMParser().parseFromString(await ef.text(), "application/xml");
+  const last = name.trim().split(/\s+/)[0].toLowerCase();
+
+  const papers = [...xml.querySelectorAll("PubmedArticle")].map(a => {
+    const t = a.querySelector("ArticleTitle")?.textContent || "";
+    const j = a.querySelector("Journal > ISOAbbreviation, Journal > Title")?.textContent || "";
+    const y = a.querySelector("PubDate > Year, ArticleDate > Year")?.textContent || "";
+    // The affiliation that matters is the one attached to *this* author.
+    let aff = "";
+    for(const au of a.querySelectorAll("AuthorList > Author")){
+      const ln = (au.querySelector("LastName")?.textContent || "").toLowerCase();
+      if(ln === last){ aff = au.querySelector("Affiliation")?.textContent || ""; break; }
+    }
+    return {title: t, journal: j, year: y, aff};
+  }).filter(p => p.title);
+
+  /* Two people share a name more often than not, so group by where they work
+     and let the reader pick. */
+  const groups = new Map();
+  papers.forEach(p => {
+    const key = orgOf(p.aff) || "Affiliation not listed";
+    if(!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(p);
+  });
+  return [...groups.entries()]
+    .map(([org, ps]) => ({org, papers: ps, n: ps.length,
+      years: [ps.map(x => +x.year).filter(Boolean)].map(v =>
+        v.length ? `${Math.min(...v)}–${Math.max(...v)}` : "")[0]}))
+    .sort((a, b) => b.n - a.n)
+    .slice(0, 6);
+}
+
+/* Affiliations are long postal addresses; the institution is the useful part.
+   One person also writes theirs six different ways — "Columbia University",
+   "Columbia University Medical Center", "Columbia University Irving…" — so trim
+   back to the institution's own name or they arrive as six different people. */
+function orgOf(aff){
+  if(!aff) return "";
+  const bits = aff.split(/[,;]/).map(x => x.trim());
+  let seg = (bits.find(b => /universit|hospital|institute|centre|center|clinic|college|school|klinik|akadem/i.test(b))
+    || bits[0] || "").replace(/^(the|at)\s+/i, "");
+  const m = seg.match(/^(.*?\b(?:Universit\w+|Hospital|Institute|Clinic|College|School|Centre|Center|Klinik))\b/i);
+  // "Hospital for Special Surgery" starts with the keyword — keep the whole name.
+  if(m && m[1].trim().split(/\s+/).length >= 2) seg = m[1];
+  return seg.slice(0, 60);
+}
+
+/* Words every clinical paper contains. Without this the "interests" a lab gets
+   are "patients", "outcomes" and "difference", which rank nothing. */
+const PI_STOP = new Set(("a an the of and or in on for with without to from by after before during " +
+  "study review analysis outcomes outcome results result patients patient case cases series " +
+  "clinical randomized randomised controlled trial comparison compared versus vs effect effects " +
+  "using use treatment management surgical surgery total following follow up systematic meta " +
+  "associated association risk factors factor new novel report reports evaluation assessment " +
+  "our their its this that these those is are was were be been has have had can may " +
+  "difference differences minimal minimum primary secondary rate rates score scores " +
+  "higher lower increased decreased greater among within national multicenter multicentre " +
+  "single early late short long term terms year years month months does what when which " +
+  "whether impact role predictors predictor prediction characteristics trends utilization " +
+  "cohort retrospective prospective consecutive database registry-based level evidence " +
+  "safety efficacy versus similar comparable significant significantly " +
+  "health care surgeon surgeons orthopaedic orthopedic orthopaedics orthopedics " +
+  "medicine specialty hospital department academic current review-article").split(" "));
+
+/* What is this lab actually about? Frequent title terms, minus the words every
+   paper contains. Bigrams count double — "pedicle screw" says more than either. */
+function piKeywords(papers, limit = 5){
+  const freq = new Map();
+  const add = (t, by) => freq.set(t, (freq.get(t) || 0) + by);
+  papers.forEach(p => {
+    const words = p.title.toLowerCase().replace(/[^a-z0-9 -]/g, " ").split(/\s+/)
+      .filter(w => w.length > 3 && !PI_STOP.has(w));
+    words.forEach(w => add(w, 1));
+    for(let i = 0; i < words.length - 1; i++) add(`${words[i]} ${words[i + 1]}`, 2);
+  });
+  // A prolific lab and a new one need different bars for "recurring".
+  const floor = Math.max(2, Math.round(papers.length * 0.08));
+  const ranked = [...freq.entries()]
+    // A lone word has to be commoner than a phrase to count as a real interest.
+    .filter(([t, n]) => n >= (t.includes(" ") ? floor * 2 : floor * 1.5))
+    .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length);
+
+  /* "minimal clinically important difference" otherwise arrives as three
+     overlapping bigrams plus its own words. Take the strongest phrase and skip
+     anything that reuses a word already spoken for. */
+  const out = [], claimed = new Set();
+  for(const [term] of ranked){
+    const words = term.split(" ");
+    if(words.some(w => claimed.has(w))) continue;
+    words.forEach(w => claimed.add(w));
+    out.push(term);
+    if(out.length >= limit) break;
+  }
+  return out;
+}
+
+function piFields(papers){
+  const tally = {};
+  papers.forEach(p => {
+    const hay = `${p.title} ${p.journal}`;
+    FIELD_CUES_JS.forEach(c => { if(c.re.test(hay)) tally[c.k] = (tally[c.k] || 0) + c.w; });
+  });
+  const top = Object.entries(tally).sort((a, b) => b[1] - a[1]);
+  const floor = top.length ? top[0][1] * 0.25 : 0;
+  return top.filter(([, v]) => v >= floor).map(([k]) => k).slice(0, 4);
+}
 
 /* ---------- tailoring ---------- */
 /* Two rules held throughout: this **ranks, it never hides** — missing a paper
@@ -1379,10 +1214,15 @@ function download(name, text){
 const SUGGESTED_KW = ["robotic", "periprosthetic joint infection", "ACL", "rotator cuff",
   "cartilage", "machine learning", "opioid", "cost", "registry", "nonunion",
   "reverse shoulder", "scoliosis", "return to sport", "outpatient"];
-let obStep = 0, obDraft = null;
+let obStep = 0, obDraft = null, obBusy = false;
+/* The PI step appears only where it makes sense, so nobody else pays for it. */
+const obSteps = () => obDraft.role === "studentres"
+  ? ["role", "pi", "fields", "interests"] : ["role", "fields", "interests"];
 
 function obOpen(){
-  obDraft = {role: PROFILE.role, fields: PROFILE.fields.slice(), keywords: PROFILE.keywords.slice()};
+  obDraft = {role: PROFILE.role, fields: PROFILE.fields.slice(),
+             keywords: PROFILE.keywords.slice(), pi: PROFILE.pi || null,
+             piQuery: "", piResults: null, piError: ""};
   if(!obDraft.fields.length) obDraft.fields = ALL_FIELDS.slice();
   obStep = 0;
   document.getElementById("onboard").hidden = false;
@@ -1394,6 +1234,7 @@ function obClose(saveIt){
     PROFILE.role = obDraft.role;
     PROFILE.fields = obDraft.fields;
     PROFILE.keywords = obDraft.keywords;
+    PROFILE.pi = obDraft.pi;
     PROFILE.made = PROFILE.made || new Date().toISOString();
     saveProfile();
     state.fields = obDraft.fields.length ? obDraft.fields.slice() : ALL_FIELDS.slice();
@@ -1410,7 +1251,33 @@ function obClose(saveIt){
 function obRender(){
   const counts = Object.fromEntries((state.feed.fields || []).map(f => [f.key, f.n]));
   const body = document.getElementById("obBody");
-  if(obStep === 0){
+  const step = obSteps()[obStep];
+  if(step === "pi"){
+    const r = obDraft.piResults;
+    body.innerHTML = `
+      <h2 id="obTitle">Who do you work with?</h2>
+      <p class="sub">Search your PI and we'll read their recent PubMed record to work out
+        what your lab is about — then start your feed there. You can edit all of it next.</p>
+      <input class="ob-input" id="piInput" placeholder="Surname and initials — e.g. Bedair H"
+             value="${esc(obDraft.piQuery)}" autocomplete="off">
+      <div class="ob-sug"><button data-pisearch>Search PubMed</button></div>
+      ${obBusy ? `<p class="sub" style="margin-top:12px">Searching PubMed…</p>` : ""}
+      ${obDraft.piError ? `<p class="sub" style="margin-top:12px;color:var(--amber)">${esc(obDraft.piError)}</p>` : ""}
+      ${obDraft.pi ? `
+        <div class="pi-found">
+          <b>${esc(obDraft.pi.name)}</b> · ${esc(obDraft.pi.org)}<br>
+          ${obDraft.pi.n} recent papers${obDraft.pi.years ? ` (${esc(obDraft.pi.years)})` : ""} —
+          mostly ${esc(obDraft.pi.fields.map(k => FIELD_LABEL[k] || k).join(", ") || "unclassified")}.
+          ${obDraft.pi.keywords.length ? `Recurring terms: ${esc(obDraft.pi.keywords.join(", "))}.` : ""}
+        </div>` : ""}
+      ${r && r.length ? `<div class="ob-opts" style="margin-top:12px">${r.map((g, i) => `
+        <button class="ob-opt" data-pipick="${i}" aria-pressed="${obDraft.pi && obDraft.pi.org === g.org}">
+          <span>${esc(g.org)}</span>
+          <span class="n">${g.n} paper${g.n === 1 ? "" : "s"}${g.years ? ` · ${esc(g.years)}` : ""}</span>
+        </button>`).join("")}</div>` : ""}
+      ${r && !r.length ? `<p class="sub" style="margin-top:12px">No PubMed papers under that name.
+        Try surname plus initials, e.g. <b>Bedair H</b>.</p>` : ""}`;
+  }else if(step === "role"){
     body.innerHTML = `
       <h2 id="obTitle">What brings you to the literature?</h2>
       <p class="sub">This only sets sensible defaults — you can change everything later.</p>
@@ -1418,7 +1285,7 @@ function obRender(){
         <button class="ob-opt" data-role="${esc(r.key)}" aria-pressed="${obDraft.role === r.key}">
           <span>${esc(r.label)}</span><span class="hint">${esc(r.hint)}</span>
         </button>`).join("")}</div>`;
-  }else if(obStep === 1){
+  }else if(step === "fields"){
     body.innerHTML = `
       <h2 id="obTitle">Which parts of orthopaedics?</h2>
       <p class="sub">Counts are today's papers. Pick as many as you like — nothing gets
@@ -1438,22 +1305,54 @@ function obRender(){
       <div class="ob-sug">${SUGGESTED_KW.filter(k => !obDraft.keywords.includes(k))
         .slice(0, 8).map(k => `<button data-add="${esc(k)}">+ ${esc(k)}</button>`).join("")}</div>`;
   }
-  document.getElementById("obDots").innerHTML = [0, 1, 2].map(i =>
+  const steps = obSteps();
+  document.getElementById("obDots").innerHTML = steps.map((_, i) =>
     `<i class="${i === obStep ? "on" : ""}"></i>`).join("");
   const next = document.getElementById("obNext");
-  next.textContent = obStep === 2 ? "Start reading" : "Continue";
-  next.disabled = obStep === 1 && !obDraft.fields.length;
+  next.textContent = obStep === steps.length - 1 ? "Start reading" : "Continue";
+  next.disabled = (step === "fields" && !obDraft.fields.length) || obBusy;
   // The step redraws on every toggle, so put the cursor back where it was —
   // otherwise adding a second keyword means reaching for the mouse again.
-  if(obStep === 2) document.getElementById("obInput").focus();
+  if(step === "interests") document.getElementById("obInput").focus();
 }
 
 document.getElementById("obNext").addEventListener("click", () => {
-  if(obStep < 2){ obStep++; obRender(); } else obClose(true);
+  if(obStep < obSteps().length - 1){ obStep++; obRender(); } else obClose(true);
 });
 document.getElementById("obSkip").addEventListener("click", () => obClose(false));
 document.getElementById("editProfile").addEventListener("click", obOpen);
+async function runPiSearch(){
+  const q = (document.getElementById("piInput").value || "").trim();
+  if(!q) return;
+  obDraft.piQuery = q; obDraft.piError = ""; obDraft.piResults = null; obDraft.pi = null;
+  obBusy = true; obRender();
+  try{
+    obDraft.piResults = await piSearch(q);
+  }catch(err){
+    obDraft.piError = "PubMed didn't answer — it limits how often one network can ask. "
+      + "Wait a few seconds and try again, or skip and pick your fields by hand.";
+  }finally{
+    obBusy = false; obRender();
+    document.getElementById("piInput").value = obDraft.piQuery;
+  }
+}
+
+/* Picking the right person is what turns a name into a profile: their papers
+   go through the feed's own field cues, and their recurring title terms become
+   the interests that rank everything else. */
+function piPick(i){
+  const g = obDraft.piResults[i];
+  const fields = piFields(g.papers), keywords = piKeywords(g.papers);
+  obDraft.pi = {name: obDraft.piQuery, org: g.org, n: g.n, years: g.years, fields, keywords};
+  if(fields.length) obDraft.fields = ALL_FIELDS.filter(k => fields.includes(k));
+  keywords.forEach(k => { if(!obDraft.keywords.includes(k)) obDraft.keywords.push(k); });
+  obRender();
+}
+
 document.getElementById("obBody").addEventListener("click", e => {
+  if(e.target.closest("[data-pisearch]")){ runPiSearch(); return; }
+  const pick = e.target.closest("[data-pipick]");
+  if(pick){ piPick(+pick.dataset.pipick); return; }
   const role = e.target.closest("[data-role]");
   if(role){
     obDraft.role = obDraft.role === role.dataset.role ? "" : role.dataset.role;
@@ -1474,6 +1373,7 @@ document.getElementById("obBody").addEventListener("click", e => {
   if(del){ obDraft.keywords = obDraft.keywords.filter(k => k !== del.dataset.del); obRender(); }
 });
 document.getElementById("obBody").addEventListener("keydown", e => {
+  if(e.target.id === "piInput" && e.key === "Enter"){ e.preventDefault(); runPiSearch(); return; }
   if(e.target.id !== "obInput" || e.key !== "Enter") return;
   e.preventDefault();
   const v = e.target.value.trim();
