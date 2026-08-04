@@ -34,9 +34,9 @@ jobs:
 
       - name: Build the page
         env:
-          # Crossref's polite pool wants a contact address; keep the real one
-          # out of the repo by setting an ORTHOBRIEF_EMAIL variable.
-          ORTHOBRIEF_EMAIL: ${{ vars.ORTHOBRIEF_EMAIL || 'orthobrief@users.noreply.github.com' }}
+          # Crossref's polite pool wants a contact address. Held as a secret
+          # rather than a variable so it is redacted from these public logs.
+          ORTHOBRIEF_EMAIL: ${{ secrets.ORTHOBRIEF_EMAIL || 'orthobrief@users.noreply.github.com' }}
         run: python3 app.py --snapshot public/index.html --public --refresh
 
       - name: Check it actually built
