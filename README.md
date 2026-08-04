@@ -232,7 +232,11 @@ Two rules the ranking keeps:
   instead of trusting it.
 
 It also learns, quietly: saving a paper adds weight to its field, journal and
-study design; opening an abstract adds less; un-saving subtracts. Weights are
+study design; opening an abstract adds less; un-saving subtracts. **Not
+interested** is the explicit counterweight — it moves the same three signals
+down and collapses the paper to a single undoable line. Set aside rather than
+deleted: you chose to hide it, so you can change your mind, and in *For you* a
+dismissed paper sinks to the bottom rather than vanishing. Weights are
 capped so no single habit can run away with the feed, and everything lives in
 one `orthobrief.profile` object you can inspect or delete. No model, no service,
 no data leaving the device — the same rules-not-magic approach as the

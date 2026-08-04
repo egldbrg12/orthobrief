@@ -266,6 +266,25 @@
   }
   .save:hover{color:var(--ink)}
   .save.on{color:var(--accent);font-weight:600}
+  .dismiss{
+    border:0;background:none;padding:0;font:inherit;font-size:12px;
+    color:var(--ink-3);cursor:pointer;opacity:0;transition:opacity .12s;
+  }
+  .card:hover .dismiss,.dismiss:focus{opacity:1}
+  .dismiss:hover{color:var(--ink)}
+  /* Set aside, not deleted: one quiet line that can be undone. */
+  .card.dismissed{
+    display:flex;align-items:baseline;gap:12px;padding:9px 0;
+    color:var(--ink-3);font-size:12.5px;
+  }
+  .card.dismissed .dtitle{
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.7;
+  }
+  .undo{
+    border:0;background:none;padding:0;font:inherit;font-size:12.5px;
+    color:var(--ink-2);cursor:pointer;text-decoration:underline;margin-left:auto;flex:0 0 auto;
+  }
+  .undo:hover{color:var(--ink)}
   .savedbar{
     display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
     padding:10px 0 2px;font-size:12.5px;color:var(--ink-3);
@@ -593,6 +612,11 @@ function renderAbstract(a){
 
 /* ---------- rendering ---------- */
 function paperCard(p){
+  if(isDismissed(p)) return `
+    <article class="card dismissed">
+      <span class="dtitle">${esc(p.title)}</span>
+      <button class="undo" data-dismiss="${esc(paperId(p))}">Undo</button>
+    </article>`;
   /* A DOI the registry has never heard of is worse than no link at all — it
      sends you to "DOI NOT FOUND". Show the string, drop the link, and point at
      PubMed instead, which always resolves. */
@@ -646,6 +670,8 @@ function paperCard(p){
     <div class="foot">
       <button class="save${isSaved(p) ? " on" : ""}" data-save="${esc(paperId(p))}"
               aria-pressed="${isSaved(p)}">${isSaved(p) ? "★ Saved" : "☆ Save"}</button>
+      <button class="dismiss" data-dismiss="${esc(paperId(p))}"
+              title="Show me fewer like this — same field, study design and journal">Not interested</button>
       ${doiHtml}${pm}
       <span class="src">${esc((p.sources || []).join(" + "))}</span>
     </div>
@@ -856,6 +882,13 @@ document.getElementById("feed").addEventListener("toggle", e => {
 }, true);
 
 document.getElementById("feed").addEventListener("click", e => {
+  const d = e.target.closest("button[data-dismiss]");
+  if(d){
+    const all = [...(state.feed.papers || []), ...savedPapers()];
+    const paper = all.find(x => paperId(x) === d.dataset.dismiss);
+    if(paper) toggleDismiss(paper);
+    return;
+  }
   const b = e.target.closest("button[data-save]");
   if(!b) return;
   const id = b.dataset.save;
@@ -1053,7 +1086,7 @@ function piFields(papers){
 /* Two rules held throughout: this **ranks, it never hides** — missing a paper
    is the one failure a literature tool cannot afford — and every score can be
    explained in words on the card that carries it. */
-const LEARN = {save: 3, open: 1, cap: 24};
+const LEARN = {save: 3, open: 1, dismiss: 2, cap: 24};
 
 function bump(key, by){
   const w = PROFILE.weights;
@@ -1083,7 +1116,7 @@ function scoreFor(p){
     + (w["design:" + ((p.study || {}).key || "")] || 0)
     + (w["journal:" + (p.journal || "")] || 0);
   if(learned) why.push(learned > 0 ? "papers like ones you saved" : "");
-  return {score: score + learned * 0.6, why: why.filter(Boolean)};
+  return {score: score + learned * 0.6 - (isDismissed(p) ? 100 : 0), why: why.filter(Boolean)};
 }
 
 /* ---------- reading state ---------- */
@@ -1102,9 +1135,11 @@ function saveStore(key, obj){
 }
 
 const SEEN_KEY = "orthobrief.seen", SAVED_KEY = "orthobrief.saved";
+const DISMISS_KEY = "orthobrief.dismissed";
 const SEEN_DAYS = 60;                        // long enough for any window
 let SEEN = loadStore(SEEN_KEY);
 let SAVED = loadStore(SAVED_KEY);
+let DISMISSED = loadStore(DISMISS_KEY);
 /* Ids that were unseen when this session started. Held for the whole session so
    the "new" marks don't evaporate out from under you as you read. */
 const NEW_IDS = new Set();
@@ -1126,6 +1161,19 @@ function markSeen(papers){
 
 const isNew = p => NEW_IDS.has(paperId(p));
 const isSaved = p => !!SAVED[paperId(p)];
+const isDismissed = p => !!DISMISSED[paperId(p)];
+
+/* "Not interested" is the counterweight to saving: the same three signals move,
+   in the opposite direction. The paper itself collapses to a single line rather
+   than disappearing — you chose to set it aside, so you get to change your mind,
+   and nothing is ever removed from the page behind your back. */
+function toggleDismiss(p){
+  const id = paperId(p);
+  if(DISMISSED[id]){ delete DISMISSED[id]; learnFrom(p, LEARN.dismiss); }
+  else { DISMISSED[id] = Date.now(); learnFrom(p, -LEARN.dismiss); }
+  saveStore(DISMISS_KEY, DISMISSED);
+  render();
+}
 
 /* Saved papers outlive the window they were found in, so the record has to
    carry enough of the paper to render and to cite without the feed. */
