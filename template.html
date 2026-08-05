@@ -968,25 +968,54 @@ async function eutils(path, params){
   throw last || new Error("PubMed unreachable");
 }
 
-async function piSearch(name){
-  const es = await eutils("esearch.fcgi", {db: "pubmed", term: `${name}[Author]`,
-    retmax: PI_MAX, sort: "date", retmode: "json"});
-  const ids = ((await es.json()).esearchresult || {}).idlist || [];
+/* People type "Dr Young-Min Kwon", "young min kwon", "Kwon YM". PubMed's author
+   index handles all three once the honorifics are gone. */
+const HONORIFIC = /^(dr|prof|professor|mr|mrs|ms|miss|md|do|phd|mbbs|mbchb|frcs|facs|dpm|msc|ma|bs|ba)$/i;
+const cleanName = raw => raw.trim().split(/\s+/)
+  .filter(w => !HONORIFIC.test(w.replace(/[.,]/g, ""))).join(" ");
+
+/* Every word of the name, so the author's surname can be recognised wherever
+   the reader happened to put it. "Young Min Kwon" and "Kwon YM" both have to
+   find the author whose LastName is "Kwon". */
+const nameTokens = n => new Set(n.toLowerCase().split(/[\s,\-.]+/).filter(w => w.length > 1));
+
+/* Surname-last is the safest guess for a fallback query: "young min kwon" -> "kwon YM". */
+function initialsForm(name){
+  const parts = name.split(/\s+/).filter(Boolean);
+  if(parts.length < 2) return "";
+  const surname = parts[parts.length - 1];
+  const initials = parts.slice(0, -1).map(w => w[0]).join("").toUpperCase();
+  return `${surname} ${initials}`;
+}
+
+async function piSearch(raw){
+  const name = cleanName(raw);
+  if(!name) return [];
+  let ids = [];
+  for(const term of [`${name}[Author]`, initialsForm(name) ? `${initialsForm(name)}[Author]` : ""]){
+    if(!term) continue;
+    const es = await eutils("esearch.fcgi", {db: "pubmed", term,
+      retmax: PI_MAX, sort: "date", retmode: "json"});
+    ids = ((await es.json()).esearchresult || {}).idlist || [];
+    if(ids.length) break;
+    await sleep(350);
+  }
   if(!ids.length) return [];
   await sleep(350);                            // stay under the 3/second ceiling
   const ef = await eutils("efetch.fcgi", {db: "pubmed", id: ids.join(","), retmode: "xml"});
   const xml = new DOMParser().parseFromString(await ef.text(), "application/xml");
-  const last = name.trim().split(/\s+/)[0].toLowerCase();
+  const tokens = nameTokens(name);
 
   const papers = [...xml.querySelectorAll("PubmedArticle")].map(a => {
     const t = a.querySelector("ArticleTitle")?.textContent || "";
     const j = a.querySelector("Journal > ISOAbbreviation, Journal > Title")?.textContent || "";
     const y = a.querySelector("PubDate > Year, ArticleDate > Year")?.textContent || "";
-    // The affiliation that matters is the one attached to *this* author.
+    // The affiliation that matters is the one attached to *this* author, found
+    // by surname wherever it sat in what the reader typed.
     let aff = "";
     for(const au of a.querySelectorAll("AuthorList > Author")){
       const ln = (au.querySelector("LastName")?.textContent || "").toLowerCase();
-      if(ln === last){ aff = au.querySelector("Affiliation")?.textContent || ""; break; }
+      if(ln && tokens.has(ln)){ aff = au.querySelector("Affiliation")?.textContent || ""; break; }
     }
     return {title: t, journal: j, year: y, aff};
   }).filter(p => p.title);
@@ -1306,7 +1335,7 @@ function obRender(){
       <h2 id="obTitle">Who do you work with?</h2>
       <p class="sub">Search your PI and we'll read their recent PubMed record to work out
         what your lab is about — then start your feed there. You can edit all of it next.</p>
-      <input class="ob-input" id="piInput" placeholder="Surname and initials — e.g. Bedair H"
+      <input class="ob-input" id="piInput" placeholder="Full name or surname + initials — e.g. Young-Min Kwon, or Kwon YM"
              value="${esc(obDraft.piQuery)}" autocomplete="off">
       <div class="ob-sug"><button data-pisearch>Search PubMed</button></div>
       ${obBusy ? `<p class="sub" style="margin-top:12px">Searching PubMed…</p>` : ""}
@@ -1324,7 +1353,7 @@ function obRender(){
           <span class="n">${g.n} paper${g.n === 1 ? "" : "s"}${g.years ? ` · ${esc(g.years)}` : ""}</span>
         </button>`).join("")}</div>` : ""}
       ${r && !r.length ? `<p class="sub" style="margin-top:12px">No PubMed papers under that name.
-        Try surname plus initials, e.g. <b>Bedair H</b>.</p>` : ""}`;
+        Try the full name (<b>Young-Min Kwon</b>) or surname plus initials (<b>Kwon YM</b>).</p>` : ""}`;
   }else if(step === "role"){
     body.innerHTML = `
       <h2 id="obTitle">What brings you to the literature?</h2>
@@ -1372,7 +1401,8 @@ document.getElementById("editProfile").addEventListener("click", obOpen);
 async function runPiSearch(){
   const q = (document.getElementById("piInput").value || "").trim();
   if(!q) return;
-  obDraft.piQuery = q; obDraft.piError = ""; obDraft.piResults = null; obDraft.pi = null;
+  obDraft.piQuery = cleanName(q) || q;
+  obDraft.piError = ""; obDraft.piResults = null; obDraft.pi = null;
   obBusy = true; obRender();
   try{
     obDraft.piResults = await piSearch(q);

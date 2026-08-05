@@ -196,6 +196,11 @@ screen; it's a starting point, not a verdict.
 
 Two details make that step work rather than merely exist:
 
+- **It takes a name however you write it.** "Young-Min Kwon", "young min kwon"
+  and "Kwon YM" all resolve to the same person, honorifics are stripped, and the
+  author's surname is recognised wherever it sits in what you typed — the first
+  version assumed surname-first and quietly filed all 41 of his MGH papers under
+  "Affiliation not listed".
 - **Disambiguation by affiliation.** "Bedair H" is an MGH arthroplasty surgeon
   *and* a clinical pathologist at Tanta University. Papers are grouped by where
   that author worked, so you pick a person, not a name. Affiliation strings are
