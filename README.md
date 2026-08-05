@@ -26,7 +26,9 @@ short summary.
 | **PubMed E-utilities** | Indexes a few days slower, but carries clean structured abstracts (`BACKGROUND: … METHODS: … CONCLUSIONS: …`) that Crossref often lacks. |
 
 Records are merged on DOI (falling back to a normalized title), keeping whichever
-copy has the richer abstract. Each paper shows which source(s) it came from.
+copy has the richer abstract. Which API a paper arrived from is our business,
+not the reader's, so the card no longer says — it's still in the JSON (`sources`)
+for anyone piping the feed.
 
 ### Why APIs instead of scraping
 
@@ -144,6 +146,11 @@ To swap in an LLM instead, replace `summarize()` in `app.py`; it takes
 
 ## Using it
 
+- **The title leads the card.** Only the study-design tag sits above it — that's
+  the one thing on the card a reader can't get from PubMed. Journal,
+  subspecialty and date follow the authors in a single grey line, because above
+  the title they competed with it for the same glance. An untagged paper that
+  isn't new drops the row above the title entirely rather than leaving a gap.
 - **Window pills** — Today / 3 / 7 / 14 days. Journals publish in bursts, so a
   quiet Sunday is normal; widen the window rather than assuming it's broken.
 - **Design chips** — filter to one study type; click again to clear. Counts

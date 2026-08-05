@@ -248,10 +248,6 @@
   .picker .n{color:var(--ink-3);font-size:12px;font-variant-numeric:tabular-nums;flex:0 0 auto}
   .picker .none{color:var(--amber);font-size:12px;margin:8px 2px 0}
 
-  /* The paper's own field, next to its journal — rose, so the two badges are
-     told apart by hue as well as position. */
-  .field{font-size:12.5px;color:var(--rose);white-space:nowrap}
-
   .pills .tag{font-variant-numeric:tabular-nums;opacity:.7}
   /* Loud enough to catch the eye on a scan, quiet enough not to shout. */
   .isnew{
@@ -395,9 +391,6 @@
     font-size:12.5px;color:var(--ink-3);
   }
   .meta > *{margin-right:9px}
-  .badge{font-size:12.5px;color:var(--ink-3)}
-  .date{color:var(--ink-3);font-size:12.5px}
-  .date::before,.field::before{content:"· ";color:var(--line-2)}
   h2{
     font-family:var(--serif);font-size:clamp(22px,1.7vw,29px);line-height:1.22;
     font-weight:600;letter-spacing:-.018em;margin:0 0 8px;
@@ -405,6 +398,10 @@
   h2 a{text-decoration:none}
   h2 a:hover{text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--accent)}
   .authors{color:var(--ink-3);font-size:13.5px;margin-bottom:0;max-width:90ch}
+  /* Where the paper appeared, what it's about, and when — below the title, in
+     one grey line. Above the title these competed with it for the same glance;
+     the title is what a reader is actually scanning for. */
+  .byline{color:var(--ink-3);font-size:12.5px;margin-top:3px}
 
   .tldr{
     background:none;border-left:2px solid var(--accent);border-radius:0;
@@ -446,7 +443,6 @@
   .doi.dead{text-decoration:line-through;text-decoration-color:var(--line-2);cursor:help;opacity:.75}
   /* The copy button only earns its space once you're on the paper. */
 
-  .src{margin-left:auto;color:var(--ink-3);font-size:12px;opacity:.75}
   .no-abs{color:var(--ink-3);font-size:13px;font-style:italic;margin:10px 0 0}
 
   /* ---------- states ---------- */
@@ -701,6 +697,17 @@ const ICONS = {
 };
 
 /* ---------- rendering ---------- */
+/* "Kwon, Bedair, … Chen (+3 more)" says the same thing twice — the ellipsis and
+   the count are both the elision. Name the two who are looked for, then count
+   the rest. The server's `authors_short` is the fallback for saved papers
+   stored before the full list was kept. */
+function authorLine(p){
+  const a = p.authors || [];
+  if(!a.length) return p.authors_short || "";
+  if(a.length <= 3) return a.join(", ");
+  return `${a[0]}, ${a[1]} and ${a.length - 2} others`;
+}
+
 function paperCard(p){
   if(isDismissed(p)) return `
     <article class="card dismissed">
@@ -727,11 +734,12 @@ function paperCard(p){
     : "";
 
   const st = p.study;
+  /* Where it appeared, what it's about, when — one line, under the authors.
+     Only the design tag stays above the title, because that is the one thing
+     here the reader can't get from PubMed. */
   const labels = ((p.fields || {}).all || []).map(k => FIELD_LABEL[k] || k);
-  const fieldHtml = labels.length
-    ? `<span class="field" title="Subspecialty${labels.length > 1 ? " (this paper is in more than one)" : ""}">${
-        esc(labels.join(" · "))}</span>`
-    : "";
+  const bylineText = [p.journal || "Unknown journal", labels.join(" · "), relDay(p.date)]
+    .filter(Boolean).join(" · ");
   /* An "Unclassified?" chip is us reporting our own miss on the reader's line.
      When we don't know the design, say nothing — absence is the honest signal. */
   const studyHtml = st && st.key !== "other"
@@ -739,18 +747,21 @@ function paperCard(p){
              title="${esc(st.confidence)} confidence — matched ${esc(st.why || "nothing")}"
         ><i class="swatch"></i>${esc(st.label)}${st.confidence === "low" ? "?" : ""}</span>`
     : "";
+  /* An untagged paper that isn't new has nothing to say above its title, and an
+     empty row still costs a line — so leave it out entirely. */
+  const newHtml = isNew(p)
+    ? `<span class="isnew" title="Not in the feed last time you looked">New</span>` : "";
+  const metaHtml = newHtml || studyHtml
+    ? `<div class="meta">${newHtml}${studyHtml}</div>` : "";
+  const by = authorLine(p);
 
   return `
   <article class="card">
-    <div class="meta">
-      ${isNew(p) ? `<span class="isnew" title="Not in the feed last time you looked">New</span>` : ""}
-      ${studyHtml}
-      <span class="badge">${esc(p.journal || "Unknown journal")}</span>
-      ${fieldHtml}
-      <span class="date">${esc(relDay(p.date))}</span>
-    </div>
+    ${metaHtml}
     <h2><a href="${esc(p.url || "#")}" target="_blank" rel="noopener">${esc(p.title)}</a></h2>
-    ${p.authors_short ? `<div class="authors">${esc(p.authors_short)}</div>` : ""}
+    ${by ? `<div class="authors">${esc(by)}</div>` : ""}
+    <div class="byline"${labels.length > 1
+      ? ` title="This paper is in more than one subspecialty"` : ""}>${esc(bylineText)}</div>
     ${whyHtml}
     ${p.summary ? `<div class="tldr"><span class="lbl">Summary</span><p>${esc(p.summary)}</p></div>` : ""}
     ${p.abstract
@@ -769,13 +780,21 @@ function paperCard(p){
       <button class="act" data-dismiss="${esc(paperId(p))}" aria-label="Not interested"
               title="Fewer like this — same field, design and journal">${ICONS.hide}</button>
       ${doiHtml}${pm}
-      <span class="src">${esc((p.sources || []).join(" + "))}</span>
     </div>
   </article>`;
 }
 
-/* Papers in the reader's chosen fields — the base every other count is of. */
+/* Papers in the reader's chosen fields — the base every other count is of.
+   Three things want it in a single render — the stats line, the list, and the
+   chip counts — and it was sorted afresh for each of them. */
+let SCOPE = null;
+function resetScope(){ SCOPE = null; }
 function inScope(){
+  if(SCOPE) return SCOPE;
+  return SCOPE = computeScope();
+}
+
+function computeScope(){
   const base = state.view === "saved" ? savedPapers() : (state.feed.papers || []);
   const pool = state.view === "new" ? base.filter(isNew) : base;
   if(state.sort === "match" && state.view !== "saved"){
