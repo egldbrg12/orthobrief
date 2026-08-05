@@ -157,10 +157,15 @@ To swap in an LLM instead, replace `summarize()` in `app.py`; it takes
   alone is a guess.
 - **`/`** focuses the search box. Filters across title, authors, abstract, and
   study type.
-- **All / New / Saved** — *New* is what wasn't in the feed the last time you
-  looked, so a return visit shows a delta rather than the same window again.
-  *Saved* is your own shelf: papers stay there after they drop out of the feed,
-  and export as **RIS** or **BibTeX** for Zotero.
+- **All / Unread / Saved** decide *which* papers are listed. *Unread* is what
+  this page hasn't shown you before, so a return visit is a delta rather than
+  the same window again — it's about you, not about publication date. *Saved*
+  is your own shelf: papers stay after they drop out of the feed, and export as
+  **RIS** or **BibTeX** for Zotero.
+- **Ordered by newest / what matches you** decides the *order* of whichever list
+  you're in. Sorting by match is not a filter — the count doesn't change, and
+  the line says so. It used to be a fourth tab called "For you", which made a
+  re-ordering look like a different set of papers.
 - **Fields** — pick the subspecialties you follow; counts show what's in the
   current window. Saved per device.
 - **Journal dropdown** — counts per journal for the current window.

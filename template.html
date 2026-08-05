@@ -375,7 +375,10 @@
   .why{font-size:12px;color:var(--accent);margin-top:6px}
 
   /* ---------- stats strip ---------- */
-  .stats{padding:2px 0 0;color:var(--ink-3);font-size:12.5px;font-variant-numeric:tabular-nums}
+  .stats{padding:2px 0 0;color:var(--ink-3);font-size:12.5px}
+  .stats .linkbtn{font-size:12.5px;text-decoration:none;border-bottom:1px dotted var(--line-2)}
+  .stats .linkbtn[aria-current]{color:var(--ink);font-weight:600;border-bottom-color:var(--accent)}
+  .stats .hintlet{opacity:.75}
 
   /* ---------- cards ---------- */
   /* No card boxes: a hairline separates papers and the title carries the
@@ -514,10 +517,11 @@
     </div>
     <div class="toolbar">
       <div class="pills" id="viewPills">
-        <button data-view="all" aria-pressed="true">All</button>
-        <button data-view="foryou" aria-pressed="false">For you</button>
-        <button data-view="new" aria-pressed="false">New<span class="tag" id="newCount"></span></button>
-        <button data-view="saved" aria-pressed="false">Saved<span class="tag" id="savedCount"></span></button>
+        <button data-view="all" aria-pressed="true" title="Everything published in this window">All</button>
+        <button data-view="new" aria-pressed="false"
+                title="Papers this page hasn't shown you before">Unread<span class="tag" id="newCount"></span></button>
+        <button data-view="saved" aria-pressed="false"
+                title="Papers you starred — they stay here after they leave the feed">Saved<span class="tag" id="savedCount"></span></button>
       </div>
       <div class="pills" id="windowPills">
         <button data-days="1" aria-pressed="true">Today</button>
@@ -611,7 +615,7 @@ function saveFields(keys){
 const FIELD_LABEL = Object.fromEntries(FIELDS_META.map(f => [f.key, f.label]));
 
 let state = { feed: FEED || EMPTY_FEED, days: 1, q: "", type: "", view: "all",
-              fields: loadFields(), error: "", loading: false };
+              fields: loadFields(), sort: "date", error: "", loading: false };
 
 /* ---------- helpers ---------- */
 /* A DOI may legally contain #, ? or & — SAGE deposits reply/comment DOIs like
@@ -682,7 +686,7 @@ function paperCard(p){
      sends you to "DOI NOT FOUND". Show the string, drop the link, and point at
      PubMed instead, which always resolves. */
   /* In For you, a paper has to be able to say why it's near the top. */
-  const reasons = state.view === "foryou" ? scoreFor(p) : {score: 0, why: []};
+  const reasons = state.sort === "match" ? scoreFor(p) : {score: 0, why: []};
   const whyHtml = reasons.why.length
     ? `<div class="why">Matches ${esc(reasons.why.slice(0, 3).join(" · "))}</div>` : "";
   const doiDead = p.doi && p.doi_ok === false;
@@ -749,7 +753,7 @@ function paperCard(p){
 function inScope(){
   const base = state.view === "saved" ? savedPapers() : (state.feed.papers || []);
   const pool = state.view === "new" ? base.filter(isNew) : base;
-  if(state.view === "foryou"){
+  if(state.sort === "match" && state.view !== "saved"){
     // Ranked, not filtered: everything is still here, the order changed.
     return pool.slice().sort((a, b) => (scoreFor(b).score - scoreFor(a).score)
       || String(b.date || "").localeCompare(String(a.date || "")));
@@ -833,12 +837,18 @@ function render(){
     `<b>${end.toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric",year:"numeric"})}</b>` +
     (f.window.days > 1 ? `<br>window: ${fmtDate(f.window.start)} → ${fmtDate(f.window.end)}` : "");
 
+  const what = state.view === "new" ? "you haven't seen before"
+    : state.view === "saved" ? "you saved" : "in this window";
+  const byMatch = state.sort === "match";
   document.getElementById("stats").innerHTML =
     `<span>${papers.length}${papers.length !== scope.length ? ` of ${scope.length}` : ""} paper${
-      papers.length === 1 ? "" : "s"}${state.view === "new" ? " new since your last visit"
-      : state.view === "saved" ? " saved" : ""}</span>${
-      state.view === "foryou" && PROFILE.pi
-        ? `<span> · ranked from ${esc(PROFILE.pi.name)}'s recent work</span>` : ""}`;
+      papers.length === 1 ? "" : "s"} ${what}</span>` +
+    (state.view === "saved" ? "" : `<span class="sortby"> · ordered by ` +
+      `<button class="linkbtn" data-sort="date"${byMatch ? "" : " aria-current=\"true\""}>newest</button> / ` +
+      `<button class="linkbtn" data-sort="match"${byMatch ? " aria-current=\"true\"" : ""}>what matches you</button>` +
+      (byMatch && PROFILE.pi ? ` <span class="hintlet">— from ${esc(PROFILE.pi.name)}'s work</span>` : "") +
+      (byMatch ? ` <span class="hintlet">— nothing is hidden, only reordered</span>` : "") +
+      `</span>`);
 
   document.getElementById("banners").innerHTML =
     (SERVER_STALE ? `<div class="banner">The running OrthoBrief server is older than this
@@ -868,7 +878,7 @@ function render(){
       <div class="empty">
         <h3>${
           state.view === "saved" ? "Nothing saved yet"
-          : state.view === "new" && f.papers.length ? "Nothing new since your last visit"
+          : state.view === "new" && f.papers.length ? "You're up to date"
           : state.error ? "Nothing loaded"
           : !f.papers.length ? "No papers in this window"
           : (!state.fields.length && ALL_FIELDS.length) ? "No fields selected"
@@ -876,7 +886,7 @@ function render(){
           : "No papers yet in these fields"}</h3>
         <p>${
           state.view === "saved" ? "Star a paper with ☆ Save and it stays here — across windows, and after it drops out of the feed."
-          : state.view === "new" && f.papers.length ? "You're caught up. Widen the window, or come back tomorrow."
+          : state.view === "new" && f.papers.length ? "Every paper in this window has been on the page before. Widen the window, or come back tomorrow."
           : state.error ? "See the message above."
           : !f.papers.length
           ? "Journals publish in bursts, and most drop new issues on weekday mornings (US/EU time). Try a wider window."
@@ -926,6 +936,12 @@ document.getElementById("viewPills").addEventListener("click", e => {
   const b = e.target.closest("button[data-view]");
   if(!b) return;
   state.view = b.dataset.view;
+  render();
+});
+document.getElementById("stats").addEventListener("click", e => {
+  const b = e.target.closest("button[data-sort]");
+  if(!b) return;
+  state.sort = b.dataset.sort;
   render();
 });
 document.getElementById("savedBar").addEventListener("click", e => {
@@ -1442,7 +1458,7 @@ function obClose(saveIt){
     saveProfile();
     state.fields = obDraft.fields.length ? obDraft.fields.slice() : ALL_FIELDS.slice();
     saveFields(state.fields);
-    if(PROFILE.keywords.length || PROFILE.role) state.view = "foryou";
+    if(PROFILE.keywords.length || PROFILE.role) state.sort = "match";
   }else{
     PROFILE.onboarded = true;                    // asked once, never nag
     saveProfile();
