@@ -151,6 +151,15 @@ To swap in an LLM instead, replace `summarize()` in `app.py`; it takes
   subspecialty and date follow the authors in a single grey line, because above
   the title they competed with it for the same glance. An untagged paper that
   isn't new drops the row above the title entirely rather than leaving a gap.
+- **On a phone the toolbar is two rows, not four.** The desktop toolbar doesn't
+  shrink, it wraps, which used to stack six rows and a third of the screen above
+  the first paper. Below 620px the tagline goes, the search box shares a row
+  with All/Unread/Saved, and the window pills sit with Filters on the row under
+  it — every control still one tap away. The card footer loses its printed DOI
+  and PMID there too: `@media (hover:none)` means it's always open on touch, and
+  two lines of monospace identifiers on every card is not what a phone reader
+  came for. The buttons stay, Copy DOI among them, and an *unregistered* DOI
+  still shows, because that one is a warning rather than an identifier.
 - **Window pills** — Today / 3 / 7 / 14 days. Journals publish in bursts, so a
   quiet Sunday is normal; widen the window rather than assuming it's broken.
 - **Design chips** — filter to one study type; click again to clear. Counts
