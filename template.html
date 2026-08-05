@@ -1017,7 +1017,9 @@ async function piSearch(raw){
       const ln = (au.querySelector("LastName")?.textContent || "").toLowerCase();
       if(ln && tokens.has(ln)){ aff = au.querySelector("Affiliation")?.textContent || ""; break; }
     }
-    return {title: t, journal: j, year: y, aff};
+    const mesh = [...a.querySelectorAll("MeshHeadingList > MeshHeading > DescriptorName")]
+      .map(d => d.textContent || "");
+    return {title: t, journal: j, year: y, aff, mesh};
   }).filter(p => p.title);
 
   /* Two people share a name more often than not, so group by where they work
@@ -1070,6 +1072,14 @@ const PI_STOP = new Set(("a an the of and or in on for with without to from by a
 
 /* What is this lab actually about? Frequent title terms, minus the words every
    paper contains. Bigrams count double — "pedicle screw" says more than either. */
+/* Fine inside a phrase, useless alone: "knee arthroplasty" is an interest,
+   "knee" is the whole field. These are filtered from the *final* single-word
+   picks only — stoplisting them outright would stop the phrases forming. */
+const PI_WEAK_SOLO = new Set(("joint joints bone bones arthroplasty replacement knee hip " +
+  "shoulder elbow wrist ankle foot hand spine spinal fracture fractures implant implants " +
+  "predicting comparing assessing evaluating improving understanding developing measuring " +
+  "identifying determining reporting").split(" "));
+
 function piKeywords(papers, limit = 5){
   const freq = new Map();
   const add = (t, by) => freq.set(t, (freq.get(t) || 0) + by);
@@ -1092,12 +1102,51 @@ function piKeywords(papers, limit = 5){
   const out = [], claimed = new Set();
   for(const [term] of ranked){
     const words = term.split(" ");
+    if(words.length === 1 && PI_WEAK_SOLO.has(term)) continue;
     if(words.some(w => claimed.has(w))) continue;
     words.forEach(w => claimed.add(w));
     out.push(term);
     if(out.length >= limit) break;
   }
   return out;
+}
+
+/* MeSH is a librarian's controlled vocabulary — a far better source of "what
+   this lab works on" than more n-grams off the titles. Two catches: the generic
+   headings (Humans, Male, Retrospective Studies) say nothing, and an inverted
+   heading like "Arthroplasty, Replacement, Knee" appears in no abstract, so it
+   would rank nothing. Keep only terms the papers themselves actually say. */
+const MESH_GENERIC = new Set(["humans", "male", "female", "adult", "aged", "middle aged",
+  "young adult", "adolescent", "child", "aged, 80 and over", "infant", "animals",
+  "retrospective studies", "prospective studies", "cohort studies", "follow-up studies",
+  "treatment outcome", "reproducibility of results", "risk factors", "time factors",
+  "incidence", "prevalence", "united states", "cross-sectional studies", "case-control studies",
+  "sensitivity and specificity", "predictive value of tests", "severity of illness index",
+  "postoperative complications", "reoperation", "registries", "databases, factual",
+  "surveys and questionnaires", "quality of life", "pain measurement", "logistic models"]);
+
+function piTopics(papers, exclude = [], limit = 10){
+  const text = papers.map(p => `${p.title} ${p.mesh.join(" ")}`).join(" ").toLowerCase();
+  const freq = new Map();
+  papers.forEach(p => (p.mesh || []).forEach(m => {
+    if(MESH_GENERIC.has(m.toLowerCase())) return;
+    // "Arthroplasty, Replacement, Knee" -> the head term, which is what gets written
+    const term = m.split(",")[0].trim().toLowerCase();
+    if(term.length < 4) return;
+    freq.set(term, (freq.get(term) || 0) + 1);
+  }));
+  const taken = exclude.map(k => k.toLowerCase());
+  // Also refuse a topic that reuses a meaningful word already spoken for, so
+  // "prolonged length" doesn't arrive alongside "length of stay".
+  const takenWords = new Set(taken.flatMap(k => k.split(/[\s-]+/))
+    .filter(w => w.length > 4 && !PI_STOP.has(w)));
+  return [...freq.entries()]
+    .filter(([t, n]) => n >= 2 && text.includes(t)          // must be matchable
+      && !(t.split(" ").length === 1 && PI_WEAK_SOLO.has(t))
+      && !taken.some(k => k.includes(t) || t.includes(k))    // and not already chosen
+      && !t.split(/[\s-]+/).some(w => takenWords.has(w)))
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit).map(([t]) => t);
 }
 
 function piFields(papers){
@@ -1376,11 +1425,16 @@ function obRender(){
       <h2 id="obTitle">Anything you're chasing?</h2>
       <p class="sub">Topics, techniques, a project you're working on. Papers matching these
         rise to the top of <b>For you</b> — and they're only a ranking, never a filter.</p>
+      ${obDraft.pi ? `<p class="sub" style="margin-top:-8px">Picked out of
+        <b>${esc(obDraft.pi.name)}</b>'s recent work — drop anything that isn't yours.</p>` : ""}
       <div class="ob-kw" id="obKw">${obDraft.keywords.map(k =>
         `<button data-del="${esc(k)}">${esc(k)} ✕</button>`).join("")}</div>
       <input class="ob-input" id="obInput" placeholder="e.g. periprosthetic joint infection — Enter to add" autocomplete="off">
-      <div class="ob-sug">${SUGGESTED_KW.filter(k => !obDraft.keywords.includes(k))
-        .slice(0, 8).map(k => `<button data-add="${esc(k)}">+ ${esc(k)}</button>`).join("")}</div>`;
+      <div class="ob-sug">${
+        // Suggest the rest of the lab's own topics before generic ones.
+        ((obDraft.pi ? obDraft.pi.more || [] : []).concat(SUGGESTED_KW))
+          .filter(k => !obDraft.keywords.includes(k)).slice(0, 10)
+          .map(k => `<button data-add="${esc(k)}">+ ${esc(k)}</button>`).join("")}</div>`;
   }
   const steps = obSteps();
   document.getElementById("obDots").innerHTML = steps.map((_, i) =>
@@ -1421,9 +1475,13 @@ async function runPiSearch(){
 function piPick(i){
   const g = obDraft.piResults[i];
   const fields = piFields(g.papers), keywords = piKeywords(g.papers);
-  obDraft.pi = {name: obDraft.piQuery, org: g.org, n: g.n, years: g.years, fields, keywords};
+  const topics = piTopics(g.papers, keywords);
+  // The strongest few are chosen for you; the rest wait on the next screen.
+  const chosen = keywords.concat(topics.slice(0, 3));
+  obDraft.pi = {name: obDraft.piQuery, org: g.org, n: g.n, years: g.years,
+                fields, keywords: chosen, more: topics.slice(3)};
   if(fields.length) obDraft.fields = ALL_FIELDS.filter(k => fields.includes(k));
-  keywords.forEach(k => { if(!obDraft.keywords.includes(k)) obDraft.keywords.push(k); });
+  chosen.forEach(k => { if(!obDraft.keywords.includes(k)) obDraft.keywords.push(k); });
   obRender();
 }
 

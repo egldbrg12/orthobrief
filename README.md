@@ -212,8 +212,19 @@ Two details make that step work rather than merely exist:
   read by exactly the same rules as this morning's papers — one source of truth,
   not a second implementation that drifts.
 
-Interests are the recurring phrases in their titles, with overlapping n-grams
-collapsed (otherwise "minimal clinically important difference" arrives as three
+Interests come from two places, and both are pre-selected on the last screen so
+you can start reading rather than filling in a form. **Recurring phrases in
+their titles** give the specifics; **their papers' MeSH headings** give the
+topics a librarian would have assigned. MeSH needs two corrections to be usable:
+the generic headings (*Humans*, *Male*, *Retrospective Studies*) say nothing
+about a lab, and an inverted heading like *Arthroplasty, Replacement, Knee*
+appears in no abstract — so it would rank nothing. Only terms the papers
+themselves actually write are kept, and the ones that don't fit are offered as
+one-click suggestions instead of being forced on you.
+
+Words that are useful inside a phrase but meaningless alone are dropped from the
+final picks: *knee arthroplasty* is an interest, *knee* is the whole field.
+Phrases are collapsed against each other too (otherwise "minimal clinically important difference" arrives as three
 fragments plus its own words) and the vocabulary every clinical paper shares
 filtered out. Real examples: *Kocher M → anterior cruciate, osteochondritis
 dissecans, ligament reconstruction*; *Lenke L → adult spinal, proximal
