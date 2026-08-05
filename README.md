@@ -323,6 +323,18 @@ manual run from the Actions tab, restarts the clock.
 
 ## Notes
 
+- **The page paints one screenful, not the window.** Fourteen days of
+  orthopaedics is well over a thousand papers, and the list used to be rebuilt in
+  full on every keystroke, chip and tab. Three things fixed it: the search
+  haystack and the match score are each derived once per paper instead of once
+  per comparison (`textOf`, `SCORES`), `inScope()` sorts once per render rather
+  than three times, and the feed paints 40 cards plus an `IntersectionObserver`
+  sentinel that asks for the next 40 as you approach. On a 612-paper window
+  sorted by match that is 69 ms of JavaScript per keystroke down to 1.7 ms, and
+  ~1.7 MB of HTML per render down to ~110 KB. The painted depth survives a
+  re-render of the *same* list, so dismissing a paper 400 deep doesn't return
+  you to the top, and the swap is a single write so the page never collapses to
+  nothing and takes your scroll position with it.
 - Responses cache to `.cache/` for 30 minutes, keyed by date and window.
 - Crossref is queried on the polite pool via the `mailto` parameter; PubMed calls
   are throttled below NCBI's 3 req/s limit. Set `ORTHOBRIEF_EMAIL` to change the

@@ -644,6 +644,31 @@ function relDay(iso){
   return fmtDate(iso);
 }
 
+/* A paper's own text, lower-cased once and kept. Searching and scoring both
+   want it, both run over every paper in the window, and both used to build a
+   fresh copy of the whole abstract each time they were asked — thousands of
+   full-abstract copies per keystroke on a wide window. A paper's text never
+   changes, so this is cached for as long as the paper is in memory. */
+const TEXT = new WeakMap();
+function textOf(p){
+  let t = TEXT.get(p);
+  if(!t){
+    const title = String(p.title || "").toLowerCase();
+    const abs = String(p.abstract || "").toLowerCase();
+    t = {
+      /* What a reader's keywords match: the paper's own words, so "knee" isn't
+         a hit for every paper that happens to appear in The Knee. */
+      words: title + " " + abs,
+      /* What the search box matches: everything the card shows. */
+      search: [title, (p.authors || []).join(" ").toLowerCase(), abs,
+               String(p.journal || "").toLowerCase(),
+               String((p.study || {}).label || "").toLowerCase()].join(" "),
+    };
+    TEXT.set(p, t);
+  }
+  return t;
+}
+
 /* Renders a structured abstract with its section labels styled. */
 function renderAbstract(a){
   if(!a) return "";
@@ -769,10 +794,7 @@ function visible(skipType){
   const q = state.q.trim().toLowerCase();
   return inScope().filter(p => {
     if(!skipType && state.type && (p.study || {}).key !== state.type) return false;
-    if(!q) return true;
-    return (p.title + " " + (p.authors || []).join(" ") + " " + (p.abstract || "") + " " +
-            p.journal + " " + ((p.study || {}).label || ""))
-      .toLowerCase().includes(q);
+    return !q || textOf(p).search.includes(q);
   });
 }
 
@@ -825,7 +847,63 @@ function renderViewCounts(){
   document.getElementById("savedBar").hidden = state.view !== "saved" || !savedN;
 }
 
+/* A week of orthopaedics is six hundred papers and about 1.7 MB of HTML, and
+   all of it used to be built on every keystroke for a reader who was looking at
+   the first screenful. Paint a screenful; let scrolling ask for the rest.
+   Everything that acts on a card is delegated from #feed, so a card that
+   arrives later behaves exactly like one that was there from the start. */
+const BATCH = 40;
+let pending = [];       /* below the sentinel: written when the reader gets there */
+let painted = 0;
+let sentinel = null;
+let lastKey = "";
+
+const feedObserver = "IntersectionObserver" in window
+  ? new IntersectionObserver(es => { if(es.some(e => e.isIntersecting)) paintMore(); },
+      /* Arrive before the reader does, so the list never visibly stalls. */
+      {rootMargin: "800px"})
+  : null;
+
+/* Which list is on screen, and in what order. Dismissing a paper re-renders,
+   and a reader four hundred papers deep shouldn't land back at the top — so the
+   depth already painted survives a re-render of the same list. Change what is
+   listed, or how it is ordered, and it starts from one screenful again. */
+const listKey = () => [state.view, state.sort, state.q.trim().toLowerCase(),
+  state.type, state.days, state.fields.join(",")].join("|");
+
+function paintList(papers){
+  const feedEl = document.getElementById("feed");
+  if(sentinel && feedObserver) feedObserver.unobserve(sentinel);
+  const key = listKey();
+  const depth = key === lastKey ? Math.max(BATCH, painted) : BATCH;
+  lastKey = key;
+  pending = papers.slice();
+  /* With no observer to ask for more, paint the lot rather than stranding
+     papers below a sentinel nothing will ever trip. */
+  const first = pending.splice(0, feedObserver ? depth : pending.length);
+  painted = first.length;
+  /* One write: emptying the element first would collapse the page to nothing
+     for an instant and take the reader's scroll position down with it. */
+  feedEl.innerHTML = first.map(paperCard).join("")
+    + (pending.length ? `<div class="more"></div>` : "");
+  sentinel = feedEl.querySelector(".more");
+  if(sentinel) feedObserver.observe(sentinel);
+}
+
+function paintMore(){
+  if(!sentinel || !pending.length) return;
+  const next = pending.splice(0, BATCH);
+  painted += next.length;
+  sentinel.insertAdjacentHTML("beforebegin", next.map(paperCard).join(""));
+  /* Re-observing while the sentinel is still on screen fills the viewport: the
+     callback runs again, and again, until the sentinel has been pushed below. */
+  if(pending.length) feedObserver.observe(sentinel);
+  else { feedObserver.unobserve(sentinel); sentinel.remove(); sentinel = null; }
+}
+
 function render(){
+  resetScores();
+  resetScope();
   markSeen(state.feed.papers || []);
   const f = state.feed, scope = inScope(), papers = visible();
   renderFieldsPicker();
@@ -874,6 +952,9 @@ function render(){
 
   const feedEl = document.getElementById("feed");
   if(!papers.length){
+    if(sentinel && feedObserver) feedObserver.unobserve(sentinel);
+    pending = [];
+    sentinel = null;
     feedEl.innerHTML = `
       <div class="empty">
         <h3>${
@@ -898,7 +979,7 @@ function render(){
       </div>`;
     return;
   }
-  feedEl.innerHTML = papers.map(paperCard).join("");
+  paintList(papers);
 }
 
 /* ---------- data ---------- */
@@ -1269,14 +1350,27 @@ function learnFrom(p, by){
   if(j) bump("journal:" + j, by);
 }
 
+/* Sorting by match asks for both sides of every comparison, so a window of six
+   hundred papers wanted several thousand scores per render — and then the cards
+   asked again on the way out. A score can only change between renders, never
+   during one, so it is computed once per paper per render and thrown away with
+   the rest of the render's working state. */
+let SCORES = new WeakMap();
+function resetScores(){ SCORES = new WeakMap(); }
 function scoreFor(p){
+  let s = SCORES.get(p);
+  if(!s){ s = computeScore(p); SCORES.set(p, s); }
+  return s;
+}
+
+function computeScore(p){
   const why = [];
   let score = 0;
   const chosen = new Set(PROFILE.fields.length ? PROFILE.fields : state.fields);
   ((p.fields || {}).all || []).forEach(k => {
     if(chosen.has(k)){ score += 3; why.push(FIELD_LABEL[k] || k); }
   });
-  const hay = `${p.title || ""} ${p.abstract || ""}`.toLowerCase();
+  const hay = textOf(p).words;
   (PROFILE.keywords || []).forEach(kw => {
     if(kw && hay.includes(kw.toLowerCase())){ score += 6; why.push(`“${kw}”`); }
   });
