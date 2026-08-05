@@ -264,13 +264,13 @@
     border:0;background:none;padding:0;font:inherit;font-size:12px;
     color:var(--ink-3);cursor:pointer;
   }
+  /* These no longer need their own hover rule — the whole row reveals together. */
   .save:hover{color:var(--ink)}
   .save.on{color:var(--accent);font-weight:600}
   .dismiss{
     border:0;background:none;padding:0;font:inherit;font-size:12px;
-    color:var(--ink-3);cursor:pointer;opacity:0;transition:opacity .12s;
+    color:var(--ink-3);cursor:pointer;
   }
-  .card:hover .dismiss,.dismiss:focus{opacity:1}
   .dismiss:hover{color:var(--ink)}
   /* Set aside, not deleted: one quiet line that can be undone. */
   .card.dismissed{
@@ -426,7 +426,15 @@
   .abs-body .sec{color:var(--ink);font-weight:650;font-size:11.5px;letter-spacing:.05em;display:block;margin-top:10px}
   .abs-body .sec:first-child{margin-top:0}
 
-  .foot{display:flex;align-items:baseline;gap:14px;margin-top:16px;flex-wrap:wrap}
+  /* Actions and identifiers are for the paper you've stopped on, not for the
+     forty you're scanning past. They fade in on hover — and stay put on touch,
+     where there is no hover to reveal them. */
+  .foot{
+    display:flex;align-items:baseline;gap:14px;margin-top:14px;flex-wrap:wrap;
+    opacity:0;transition:opacity .12s;
+  }
+  .card:hover .foot,.card:focus-within .foot{opacity:1}
+  @media (hover:none){ .foot{opacity:1} }
   .doi{
     font-family:var(--mono);font-size:12px;color:var(--ink-3);
     background:none;border:0;padding:0;text-decoration:none;
@@ -436,9 +444,8 @@
   /* The copy button only earns its space once you're on the paper. */
   .copy{
     border:0;background:none;color:var(--ink-3);
-    font:inherit;font-size:12px;padding:0;cursor:pointer;opacity:0;transition:opacity .12s;
+    font:inherit;font-size:12px;padding:0;cursor:pointer;
   }
-  .card:hover .copy,.copy:focus{opacity:1}
   .copy:hover{color:var(--ink)}
   .copy.done{color:var(--accent);border-color:var(--accent)}
   .src{margin-left:auto;color:var(--ink-3);font-size:12px;opacity:.75}
@@ -681,7 +688,9 @@ function paperCard(p){
     ? `<span class="field" title="Subspecialty${labels.length > 1 ? " (this paper is in more than one)" : ""}">${
         esc(labels.join(" · "))}</span>`
     : "";
-  const studyHtml = st
+  /* An "Unclassified?" chip is us reporting our own miss on the reader's line.
+     When we don't know the design, say nothing — absence is the honest signal. */
+  const studyHtml = st && st.key !== "other"
     ? `<span class="study ${st.confidence === "low" ? "unsure" : ""}" data-k="${esc(st.key)}"
              title="${esc(st.confidence)} confidence — matched ${esc(st.why || "nothing")}"
         ><i class="swatch"></i>${esc(st.label)}${st.confidence === "low" ? "?" : ""}</span>`
@@ -704,8 +713,7 @@ function paperCard(p){
       ? `<details class="abs"><summary>Full abstract</summary>
            <div class="abs-body">${renderAbstract(p.abstract)}</div>
          </details>`
-      : state.feed.public
-      ? `<p class="no-abs"><a href="${esc(p.url || "#")}" target="_blank" rel="noopener">Read the abstract at the source →</a></p>`
+      : state.feed.public ? ""
       : `<p class="no-abs">No abstract deposited yet — publishers often add it a few days after the DOI.</p>`}
     <div class="foot">
       <button class="save${isSaved(p) ? " on" : ""}" data-save="${esc(paperId(p))}"

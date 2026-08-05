@@ -560,7 +560,7 @@ _CUES = [
     ("sysrev", 6, r"systematic review|meta[- ]?analys[ie]s|network meta|pooled analysis|scoping review|umbrella review|evidence synthesis", True),
     ("sysrev", 3, r"\bprisma\b|\bprospero\b|random[- ]effects model|forest plot|pooled (odds|risk|mean)|studies were (included|screened)", False),
 
-    ("rct", 6, r"randomi[sz]ed[ -]?(controlled |clinical |double[- ]blind |open[- ]label |)(pilot |feasibility |crossover |multicent(er|re) |)(trial|study)|\brct\b", True),
+    ("rct", 6, r"randomi[sz]ed[ -](?:\w+[- ]){0,3}(trial|study)|\brct\b", True),
     ("rct", 4, r"randomly (assigned|allocated)|double[- ]blind|placebo[- ]controlled|allocation concealment|1:1 randomi|intention[- ]to[- ]treat", False),
 
     ("registry", 6, r"(national|regional|institutional) (joint |arthroplasty |)registr|joint replacement registr|\bnjr\b|aoanjrr|\bajrr\b|swedish (hip|knee|arthroplasty)|danish (hip|knee|arthroplasty)|norwegian arthroplasty|dutch arthroplasty|new zealand joint", False),
@@ -589,14 +589,23 @@ _CUES = [
 
     ("technique", 5, r"surgical technique|technical note|technique (article|description|guide)|tips and tricks|step[- ]by[- ]step|we (describe|present) (a|our) (novel |modified |new |)(technique|approach)", True),
 
+    # A title that says "survey" is a survey; in the body it's usually someone
+    # else's survey being cited, hence strict.
+    ("survey", 5, r"\bsurvey\b", True),
     ("survey", 5, r"\bdelphi\b|consensus statement|expert consensus|cross[- ]sectional survey|survey (was |were |)(distributed|sent|administered)|response rate of|survey respondents|we surveyed", False),
 
     # Editorial notices are decisive: a "CORR Insights®" piece commenting on a
     # systematic review must not be filed as one.
-    ("review", 8, r"^(corrigendum|erratum|correction to|retraction)|corr insights|(author'?s? |)reply to the letter|response to the letter to the editor", False),
+    ("review", 8, r"^(corrigendum|erratum|correction to|retraction|comment on)|corr insights|(author'?s? |)reply to the letter|response to the letter to the editor", False),
     ("review", 4, r"narrative review|current concepts|state of the art|review of the literature|this review (summari|discuss|examin)|letter to the editor|editorial comment|\bcommentary\b", True),
 
-    ("cohort", 4, r"retrospective(ly)? (review|cohort|analy[sz]|stud|identif|examin|evaluat|assess)|were retrospectively|prospective(ly)? (cohort|study|series|observational|collected|enrolled|followed)|propensity[- ](score[- ])?match|matched (cohort|control)|consecutive patients|case[- ]control|chart review|medical records (of|were|from)", False),
+    # `(?:\w+[- ]){0,3}` is the load-bearing part: journals write "retrospective
+    # multicenter cohort study" and "retrospective single-centre comparative
+    # study", and requiring the design word to sit immediately after
+    # "retrospective" missed every one of them.
+    ("cohort", 4, r"retrospective(ly)?[ -](?:\w+[- ]){0,3}(review|cohort|analy[sz]|stud|identif|examin|evaluat|assess|comparison|compar)|were retrospectively|prospective(ly)?[ -](?:\w+[- ]){0,3}(cohort|study|series|observational|collected|enrolled|followed|compar)|propensity[- ](score[- ])?match|matched (cohort|control)|consecutive patients|case[- ]control|chart review|medical records (of|were|from)", False),
+    # Mendelian randomisation is an observational causal design, not a trial.
+    ("cohort", 5, r"mendelian randomi[sz]ation", False),
     ("cohort", 3, r"(data|records|charts) of \d+ patients|\d+ patients (were|who|with|undergoing)|clinical data of|patients were (enrolled|included|identified|divided|allocated|followed)|we (included|identified|reviewed|analy[sz]ed|enrolled)\b", False),
     ("cohort", 2, r"patients (who |)underwent|minimum \d+[- ](year|month) follow|mean follow[- ]up|\bfollow[- ]up of \d|were included in the (study|analysis)|harris hip score|\bwomac\b|\bkss\b|oxford (knee|hip) score|patient[- ]reported outcome", False),
 ]

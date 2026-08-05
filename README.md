@@ -105,6 +105,11 @@ Two evidence streams:
    zones, which is what keeps every meta-analysis's inclusion criteria from
    being read as an RCT.
 
+When no cue fires at all, the card shows **no design tag** rather than an
+"Unclassified?" chip — reporting our own miss on every uncertain paper is noise,
+and absence is the honest signal. (~11% of papers, two thirds of which have no
+abstract yet to read.)
+
 Each tag carries a confidence and the exact cue that fired; hover it in the UI.
 Low-confidence tags render dashed with a trailing `?`. A clinical paper that
 never names its own design falls back to *clinical cohort* if it counts patients
@@ -144,6 +149,9 @@ To swap in an LLM instead, replace `summarize()` in `app.py`; it takes
 - **Design chips** — filter to one study type; click again to clear. Counts
   respect the search box and journal filter, so they always describe what you're
   actually looking at.
+- **Actions appear on the paper you stop at.** Save, Share, Not interested and
+  the DOI fade in on hover, so scanning forty papers isn't forty rows of
+  controls. On touch, where there's no hover, they stay visible.
 - **`/`** focuses the search box. Filters across title, authors, abstract, and
   study type.
 - **All / New / Saved** — *New* is what wasn't in the feed the last time you
