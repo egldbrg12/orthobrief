@@ -290,6 +290,30 @@
     padding:10px 0 2px;font-size:12.5px;color:var(--ink-3);
   }
 
+  /* ---------- share ---------- */
+  .share{
+    position:fixed;inset:0;z-index:90;display:grid;place-items:center;padding:20px;
+    background:color-mix(in srgb,var(--bg) 84%,transparent);backdrop-filter:blur(3px);
+  }
+  .share-box{
+    width:min(680px,100%);background:var(--panel);border:1px solid var(--line-2);
+    border-radius:16px;box-shadow:0 20px 60px -20px rgba(0,0,0,.35);padding:16px;
+  }
+  .share-card{border:1px solid var(--line);border-radius:10px;overflow:hidden;line-height:0}
+  .share-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .share-acts button{
+    border:1px solid var(--line);background:var(--panel);color:var(--ink-2);
+    font:inherit;font-size:13px;padding:7px 12px;border-radius:9px;cursor:pointer;
+  }
+  .share-acts button:hover{border-color:var(--line-2);color:var(--ink)}
+  .share-acts .share-close{margin-left:auto;border-color:transparent;color:var(--ink-3)}
+  .toast{
+    position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(8px);
+    z-index:95;background:var(--ink);color:var(--bg);font-size:13px;
+    padding:9px 16px;border-radius:999px;opacity:0;pointer-events:none;transition:all .16s;
+  }
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
   /* ---------- onboarding ---------- */
   .onboard{
     position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:20px;
@@ -463,6 +487,22 @@
     </div>
   </div>
 </div>
+
+<div class="share" id="share" hidden>
+  <div class="share-box" role="dialog" aria-modal="true" aria-label="Share this paper">
+    <div class="share-card" id="shareCard"></div>
+    <div class="share-acts">
+      <button data-share="download">Save image</button>
+      <button data-share="image">Copy image</button>
+      <button data-share="chat">Copy summary</button>
+      <button data-share="cite">Copy citation</button>
+      <button data-share="link">Copy link</button>
+      <button data-share="native" id="shareNative" hidden>Share…</button>
+      <button data-close class="share-close">Close</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <div class="wrap">
     <div class="masthead">
@@ -670,6 +710,8 @@ function paperCard(p){
     <div class="foot">
       <button class="save${isSaved(p) ? " on" : ""}" data-save="${esc(paperId(p))}"
               aria-pressed="${isSaved(p)}">${isSaved(p) ? "★ Saved" : "☆ Save"}</button>
+      <button class="dismiss" data-shareid="${esc(paperId(p))}"
+              title="Share this paper">Share</button>
       <button class="dismiss" data-dismiss="${esc(paperId(p))}"
               title="Show me fewer like this — same field, study design and journal">Not interested</button>
       ${doiHtml}${pm}
@@ -882,6 +924,13 @@ document.getElementById("feed").addEventListener("toggle", e => {
 }, true);
 
 document.getElementById("feed").addEventListener("click", e => {
+  const sh = e.target.closest("button[data-shareid]");
+  if(sh){
+    const all = [...(state.feed.papers || []), ...savedPapers()];
+    const paper = all.find(x => paperId(x) === sh.dataset.shareid);
+    if(paper) openShare(paper);
+    return;
+  }
   const d = e.target.closest("button[data-dismiss]");
   if(d){
     const all = [...(state.feed.papers || []), ...savedPapers()];
@@ -1326,7 +1375,7 @@ function toBibTeX(papers){
 }
 
 function download(name, text){
-  const blob = new Blob([text], {type: "text/plain;charset=utf-8"});
+  const blob = text instanceof Blob ? text : new Blob([text], {type: "text/plain;charset=utf-8"});
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = name;
@@ -1514,6 +1563,161 @@ document.getElementById("obBody").addEventListener("keydown", e => {
   e.preventDefault();
   const v = e.target.value.trim();
   if(v && !obDraft.keywords.includes(v)){ obDraft.keywords.push(v); obRender(); }
+});
+
+/* ---------- sharing ---------- */
+/* A link alone loses everything that made the paper worth sending: what kind of
+   study it is, and what it found. The card carries those; the text forms are
+   there for the places an image is the wrong object. */
+const CARD_W = 1200, CARD_H = 630;
+
+function citationOf(p){
+  const authors = (p.authors || []);
+  const who = authors.length > 3 ? `${authors[0]}, et al.` : authors.join(", ");
+  const year = (p.date || "").slice(0, 4);
+  const bits = [who, p.title, p.journal, year].filter(Boolean).join(". ");
+  return `${bits}.${p.doi ? ` doi:${p.doi}` : p.pmid ? ` PMID ${p.pmid}` : ""}`;
+}
+
+function chatTextOf(p){
+  const link = p.doi && p.doi_ok !== false ? doiUrl(p.doi)
+    : p.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${p.pmid}/` : (p.url || "");
+  const design = (p.study || {}).label || "";
+  return [`${p.title}`, `${design ? design + " · " : ""}${p.journal || ""}`,
+    p.summary || "", link].filter(Boolean).join("\n");
+}
+
+/* Wrap to the box rather than the character count — titles vary wildly. The
+   ellipsis appears only when words were actually dropped; otherwise a title
+   that ends in a full stop comes out as "experiment.…". */
+function wrapText(ctx, text, maxWidth, maxLines){
+  const words = String(text || "").trim().split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = "";
+  for(const w of words){
+    const trial = line ? `${line} ${w}` : w;
+    if(!line || ctx.measureText(trial).width <= maxWidth){ line = trial; continue; }
+    lines.push(line);
+    line = w;
+    if(lines.length === maxLines){ line = ""; break; }
+  }
+  if(line && lines.length < maxLines) lines.push(line);
+  if(lines.join(" ").split(/\s+/).filter(Boolean).length < words.length && lines.length){
+    let l = lines[lines.length - 1];
+    while(ctx.measureText(l + "…").width > maxWidth && l.includes(" "))
+      l = l.slice(0, l.lastIndexOf(" "));
+    lines[lines.length - 1] = l + "…";
+  }
+  return lines;
+}
+
+function drawShareCard(p){
+  const dpr = 2;                                   // crisp on a retina screen
+  const c = document.createElement("canvas");
+  c.width = CARD_W * dpr; c.height = CARD_H * dpr;
+  const x = c.getContext("2d");
+  x.scale(dpr, dpr);
+
+  const INK = "#1f1d1a", MUTED = "#6b665d", ACCENT = "#2f5d8a", LINE = "#e4e1d9";
+  const sans = '-apple-system, "Segoe UI", Helvetica, Arial, sans-serif';
+  const serif = 'Georgia, "Iowan Old Style", serif';
+  const pad = 64;
+
+  x.fillStyle = "#fffffe"; x.fillRect(0, 0, CARD_W, CARD_H);
+  x.fillStyle = ACCENT; x.fillRect(0, 0, CARD_W, 8);
+
+  // masthead
+  x.font = `600 22px ${sans}`; x.fillStyle = ACCENT;
+  x.fillText("OrthoBrief", pad, pad + 6);
+  const tags = [(p.study || {}).label, ((p.fields || {}).all || [])
+    .map(k => FIELD_LABEL[k] || k)[0]].filter(Boolean).join("   ·   ");
+  if(tags){
+    x.font = `400 20px ${sans}`; x.fillStyle = MUTED;
+    x.fillText(tags, pad + x.measureText("OrthoBrief").width + 28, pad + 6);
+  }
+
+  // title — the reason anyone opens it
+  x.fillStyle = INK; x.font = `600 46px ${serif}`;
+  let y = pad + 88;
+  wrapText(x, p.title || "", CARD_W - pad * 2, 4).forEach(l => { x.fillText(l, pad, y); y += 58; });
+
+  // finding — the rule is sized to the text, not the other way round
+  if(p.summary){
+    y += 14;
+    x.font = `400 25px ${sans}`;
+    const lines = wrapText(x, p.summary, CARD_W - pad * 2 - 26, 3);
+    x.fillStyle = ACCENT; x.fillRect(pad, y - 26, 3, lines.length * 34 + 6);
+    x.fillStyle = MUTED;
+    lines.forEach(l => { x.fillText(l, pad + 22, y); y += 34; });
+  }
+
+  // source line
+  x.strokeStyle = LINE; x.lineWidth = 1;
+  x.beginPath(); x.moveTo(pad, CARD_H - 108); x.lineTo(CARD_W - pad, CARD_H - 108); x.stroke();
+  x.fillStyle = INK; x.font = `600 23px ${sans}`;
+  x.fillText(wrapText(x, p.journal || "", CARD_W - pad * 2, 1)[0] || "", pad, CARD_H - 66);
+  x.fillStyle = MUTED; x.font = `400 21px ${sans}`;
+  const meta = [(p.date || "").slice(0, 10), p.doi ? `doi:${p.doi}` : ""].filter(Boolean).join("   ·   ");
+  x.fillText(meta, pad, CARD_H - 34);
+  return c;
+}
+
+const canvasBlob = c => new Promise(res => c.toBlob(res, "image/png"));
+
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove("on"), 1800);
+}
+
+async function copyText(text, label){
+  try{ await navigator.clipboard.writeText(text); toast(label + " copied"); }
+  catch(_){ toast("Couldn't copy — your browser blocked it"); }
+}
+
+let sharePaper = null;
+
+function openShare(p){
+  sharePaper = p;
+  const wrap = document.getElementById("shareCard");
+  wrap.innerHTML = "";
+  const c = drawShareCard(p);
+  c.style.width = "100%"; c.style.height = "auto";
+  wrap.appendChild(c);
+  document.getElementById("shareNative").hidden = !navigator.share;
+  document.getElementById("share").hidden = false;
+}
+
+document.getElementById("share").addEventListener("click", async e => {
+  const act = e.target.closest("[data-share]");
+  if(e.target.id === "share" || e.target.closest("[data-close]")){
+    document.getElementById("share").hidden = true; return;
+  }
+  if(!act || !sharePaper) return;
+  const p = sharePaper, kind = act.dataset.share;
+  if(kind === "link") return copyText(chatTextOf(p).split("\n").pop(), "Link");
+  if(kind === "cite") return copyText(citationOf(p), "Citation");
+  if(kind === "chat") return copyText(chatTextOf(p), "Summary");
+  const blob = await canvasBlob(drawShareCard(p));
+  if(kind === "download"){
+    const name = (p.title || "paper").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 50);
+    download(`${name}.png`, blob);
+    return toast("Image saved");
+  }
+  if(kind === "image"){
+    try{
+      await navigator.clipboard.write([new ClipboardItem({"image/png": blob})]);
+      toast("Image copied");
+    }catch(_){ toast("Couldn't copy the image — try Save"); }
+  }
+  if(kind === "native"){
+    const file = new File([blob], "orthobrief.png", {type: "image/png"});
+    const data = navigator.canShare && navigator.canShare({files: [file]})
+      ? {files: [file], title: p.title, text: chatTextOf(p)}
+      : {title: p.title, text: chatTextOf(p)};
+    try{ await navigator.share(data); }catch(_){}
+  }
 });
 
 /* ---------- appearance ---------- */

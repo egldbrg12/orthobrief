@@ -258,6 +258,20 @@ one `orthobrief.profile` object you can inspect or delete. No model, no service,
 no data leaving the device — the same rules-not-magic approach as the
 classifiers. **Edit your interests** in the footer reopens the questions.
 
+## Sharing
+
+**Share** on any paper draws a card — title, what kind of study it is, the
+finding, journal and DOI — on a `<canvas>` at 1200×630, and offers it as an
+image to save or copy, alongside plain-text forms: a chat-shaped summary, a
+citation, or just the link. On a phone it hands the image to the system share
+sheet.
+
+A bare link loses the two things that made the paper worth sending: what kind of
+study it was, and what it found. The card carries both, and still says where it
+came from, so it stays checkable rather than becoming a screenshot with no
+provenance. Everything is drawn locally — no image service, no tracking, works
+offline like the rest of the page.
+
 ## Reading state
 
 Two things are remembered on the device, in `localStorage`, with no account:
