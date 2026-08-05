@@ -260,18 +260,18 @@
     border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);
     padding:1px 6px;border-radius:5px;
   }
-  .save{
-    border:0;background:none;padding:0;font:inherit;font-size:12px;
+  /* One square target for every action: 26px is a comfortable click and a
+     just-about-acceptable tap, and the glyph inside stays 15px. */
+  .act{
+    display:inline-grid;place-items:center;width:26px;height:26px;
+    border:0;background:none;padding:0;border-radius:7px;
     color:var(--ink-3);cursor:pointer;
   }
-  /* These no longer need their own hover rule — the whole row reveals together. */
-  .save:hover{color:var(--ink)}
-  .save.on{color:var(--accent);font-weight:600}
-  .dismiss{
-    border:0;background:none;padding:0;font:inherit;font-size:12px;
-    color:var(--ink-3);cursor:pointer;
-  }
-  .dismiss:hover{color:var(--ink)}
+  .act:hover{color:var(--ink);background:var(--panel-2)}
+  .act:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .act.on{color:var(--accent)}
+  .act.done{color:var(--accent)}
+
   /* Set aside, not deleted: one quiet line that can be undone. */
   .card.dismissed{
     display:flex;align-items:baseline;gap:12px;padding:9px 0;
@@ -430,24 +430,19 @@
      forty you're scanning past. They fade in on hover — and stay put on touch,
      where there is no hover to reveal them. */
   .foot{
-    display:flex;align-items:baseline;gap:14px;margin-top:14px;flex-wrap:wrap;
+    display:flex;align-items:center;gap:4px;margin-top:12px;flex-wrap:wrap;
     opacity:0;transition:opacity .12s;
   }
   .card:hover .foot,.card:focus-within .foot{opacity:1}
   @media (hover:none){ .foot{opacity:1} }
   .doi{
     font-family:var(--mono);font-size:12px;color:var(--ink-3);
-    background:none;border:0;padding:0;text-decoration:none;
+    background:none;border:0;padding:0 0 0 8px;text-decoration:none;
   }
   .doi:hover{color:var(--ink);text-decoration:underline}
   .doi.dead{text-decoration:line-through;text-decoration-color:var(--line-2);cursor:help;opacity:.75}
   /* The copy button only earns its space once you're on the paper. */
-  .copy{
-    border:0;background:none;color:var(--ink-3);
-    font:inherit;font-size:12px;padding:0;cursor:pointer;
-  }
-  .copy:hover{color:var(--ink)}
-  .copy.done{color:var(--accent);border-color:var(--accent)}
+
   .src{margin-left:auto;color:var(--ink-3);font-size:12px;opacity:.75}
   .no-abs{color:var(--ink-3);font-size:13px;font-style:italic;margin:10px 0 0}
 
@@ -657,6 +652,25 @@ function renderAbstract(a){
   return out;
 }
 
+/* ---------- icons ---------- */
+/* Inline SVG rather than an icon font or a sprite: no request, no dependency,
+   and `currentColor` means they follow the theme like any other text. Each one
+   still carries an aria-label and a title — an icon on its own is a guess. */
+const svg = (paths, fill) =>
+  `<svg viewBox="0 0 24 24" width="15" height="15" fill="${fill || "none"}" stroke="currentColor"
+        stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+
+const STAR = '<path d="M12 3.6l2.55 5.17 5.7.83-4.13 4.02.98 5.68L12 16.62l-5.1 2.68.97-5.68L3.75 9.6l5.7-.83z"/>';
+const ICONS = {
+  save:   svg(STAR),
+  saved:  svg(STAR, "currentColor"),
+  share:  svg('<path d="M12 3v11"/><path d="M8.4 6.6L12 3l3.6 3.6"/>' +
+              '<path d="M5 13v6a1.5 1.5 0 001.5 1.5h11A1.5 1.5 0 0019 19v-6"/>'),
+  hide:   svg('<circle cx="12" cy="12" r="8.4"/><path d="M6.1 17.9L17.9 6.1"/>'),
+  copy:   svg('<rect x="9" y="9" width="11" height="11" rx="2"/>' +
+              '<path d="M5 15.5V6a2 2 0 012-2h9.5"/>'),
+};
+
 /* ---------- rendering ---------- */
 function paperCard(p){
   if(isDismissed(p)) return `
@@ -677,7 +691,8 @@ function paperCard(p){
     : doiDead
     ? `<span class="doi dead" title="This DOI is not registered in the DOI system — the publisher supplied it, but it was never deposited. Use the PubMed link.">doi:${esc(p.doi)} · unregistered</span>`
     : `<a class="doi" href="${esc(doiUrl(p.doi))}" target="_blank" rel="noopener">doi:${esc(p.doi)}</a>
-       <button class="copy" data-doi="${esc(p.doi)}">copy</button>`;
+       <button class="act" data-doi="${esc(p.doi)}" aria-label="Copy DOI"
+               title="Copy DOI">${ICONS.copy}</button>`;
   const pm = p.pmid
     ? `<a class="doi" href="https://pubmed.ncbi.nlm.nih.gov/${esc(p.pmid)}/" target="_blank" rel="noopener">PMID ${esc(p.pmid)}</a>`
     : "";
@@ -716,12 +731,14 @@ function paperCard(p){
       : state.feed.public ? ""
       : `<p class="no-abs">No abstract deposited yet — publishers often add it a few days after the DOI.</p>`}
     <div class="foot">
-      <button class="save${isSaved(p) ? " on" : ""}" data-save="${esc(paperId(p))}"
-              aria-pressed="${isSaved(p)}">${isSaved(p) ? "★ Saved" : "☆ Save"}</button>
-      <button class="dismiss" data-shareid="${esc(paperId(p))}"
-              title="Share this paper">Share</button>
-      <button class="dismiss" data-dismiss="${esc(paperId(p))}"
-              title="Show me fewer like this — same field, study design and journal">Not interested</button>
+      <button class="act${isSaved(p) ? " on" : ""}" data-save="${esc(paperId(p))}"
+              aria-pressed="${isSaved(p)}" aria-label="${isSaved(p) ? "Saved" : "Save"}"
+              title="${isSaved(p) ? "Saved — click to remove" : "Save"}">${
+        isSaved(p) ? ICONS.saved : ICONS.save}</button>
+      <button class="act" data-shareid="${esc(paperId(p))}"
+              aria-label="Share" title="Share">${ICONS.share}</button>
+      <button class="act" data-dismiss="${esc(paperId(p))}" aria-label="Not interested"
+              title="Fewer like this — same field, design and journal">${ICONS.hide}</button>
       ${doiHtml}${pm}
       <span class="src">${esc((p.sources || []).join(" + "))}</span>
     </div>
@@ -962,12 +979,13 @@ document.getElementById("windowPills").addEventListener("click", e => {
 document.getElementById("refresh").addEventListener("click", () => load(state.days, true));
 document.getElementById("q").addEventListener("input", e => { state.q = e.target.value; render(); });
 document.addEventListener("click", e => {
-  const b = e.target.closest(".copy");
+  const b = e.target.closest("[data-doi]");
   if(!b) return;
   navigator.clipboard.writeText(b.dataset.doi).then(() => {
-    b.textContent = "copied"; b.classList.add("done");
-    setTimeout(() => { b.textContent = "copy"; b.classList.remove("done"); }, 1400);
-  });
+    b.classList.add("done");
+    toast("DOI copied");
+    setTimeout(() => b.classList.remove("done"), 1200);
+  }).catch(() => toast("Couldn't copy — your browser blocked it"));
 });
 /* ---------- profile ---------- */
 /* Everything that makes the feed yours: what you do, what you follow, what
@@ -1329,7 +1347,9 @@ function toggleSave(p, btn){
   const on = !!SAVED[id];
   btn.classList.toggle("on", on);
   btn.setAttribute("aria-pressed", String(on));
-  btn.textContent = on ? "★ Saved" : "☆ Save";
+  btn.setAttribute("aria-label", on ? "Saved" : "Save");
+  btn.setAttribute("title", on ? "Saved — click to remove" : "Save");
+  btn.innerHTML = on ? ICONS.saved : ICONS.save;   // an icon, not a word
   renderViewCounts();
 }
 

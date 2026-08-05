@@ -149,9 +149,12 @@ To swap in an LLM instead, replace `summarize()` in `app.py`; it takes
 - **Design chips** — filter to one study type; click again to clear. Counts
   respect the search box and journal filter, so they always describe what you're
   actually looking at.
-- **Actions appear on the paper you stop at.** Save, Share, Not interested and
-  the DOI fade in on hover, so scanning forty papers isn't forty rows of
-  controls. On touch, where there's no hover, they stay visible.
+- **Actions appear on the paper you stop at.** Save (★), Share, Not interested
+  (⊘) and Copy DOI fade in on hover, so scanning forty papers isn't forty rows
+  of controls. On touch, where there's no hover, they stay visible. They're
+  inline SVG — no icon font, no sprite request, and `currentColor` means they
+  follow the theme — with an `aria-label` and tooltip on each, because an icon
+  alone is a guess.
 - **`/`** focuses the search box. Filters across title, authors, abstract, and
   study type.
 - **All / New / Saved** — *New* is what wasn't in the feed the last time you
