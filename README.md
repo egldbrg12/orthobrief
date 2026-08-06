@@ -209,6 +209,39 @@ fields and designs you're looking at is working state, not a preference. The
 counts next to them (`Arthroplasty 30`) describe the *current window*, which is
 context a separate page would lose.
 
+## Standing queries (RSS)
+
+The one thing this classifier can do that a PubMed alert cannot: say *an RCT
+appeared in shoulder arthroplasty* on the day the DOI registers. NLM assigns
+publication types weeks later; the cue classifier reads the abstract
+immediately. That is worth nothing while it sits on a page someone has to
+remember to open, so every subspecialty × design pair is also a feed:
+
+```
+feeds/all.xml                       everything, newest 100
+feeds/evidence.xml                  RCTs and systematic reviews, all fields
+feeds/design/rct.xml                one design, all fields          (13 of these)
+feeds/field/shoulder.xml            one field, any design           (10)
+feeds/field/shoulder-evidence.xml   one field, RCTs and SRs         (10)
+feeds/field/shoulder-rct.xml        one field, one design           (130)
+```
+
+165 files, ~4 MB, written by the same daily Actions run that builds the page —
+from the 14-day window it has already fetched, so they cost no extra calls to
+Crossref or NCBI. **Subscribe to this search** in the footer composes the URL
+for you and opens pre-filled with whatever you're currently looking at.
+
+Most of them are empty most days, and that is the point of a standing query:
+nothing arrives until the thing you asked about appears. Items carry the title,
+journal, design tag, fields, authors and the extractive summary, and link to the
+DOI — or to PubMed when the DOI was never registered. GUIDs are stable across
+rebuilds, so a daily build doesn't re-notify anyone about papers they've seen.
+
+No accounts, no server, no email infrastructure, nothing added to the dependency
+list — static XML in a reader the user already checks. The dev server generates
+the same feeds on demand at `/feeds/…`, so a query can be tested locally exactly
+as it will be published.
+
 ## Other entry points
 
 ```bash

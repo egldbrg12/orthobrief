@@ -37,7 +37,9 @@ jobs:
           # Crossref's polite pool wants a contact address. Held as a secret
           # rather than a variable so it is redacted from these public logs.
           ORTHOBRIEF_EMAIL: ${{ secrets.ORTHOBRIEF_EMAIL || 'orthobrief@users.noreply.github.com' }}
-        run: python3 app.py --snapshot public/index.html --public --refresh
+        run: >
+          python3 app.py --snapshot public/index.html --public --refresh
+          --feeds public/feeds
 
       - name: Check it actually built
         run: |
@@ -52,6 +54,29 @@ jobs:
               sys.exit(f"only {papers} papers — refusing to publish a broken build")
           if '__ORTHOBRIEF_DATA__' in html:
               sys.exit("template tokens were not filled in")
+          PY
+
+      - name: Check the standing-query feeds
+        run: |
+          python3 - <<'PY'
+          import glob, sys, xml.etree.ElementTree as ET
+          from email.utils import parsedate_to_datetime
+          files = sorted(glob.glob("public/feeds/**/*.xml", recursive=True))
+          if len(files) < 150:
+              sys.exit(f"only {len(files)} feeds — expected one per field × design")
+          items = 0
+          for f in files:                       # a malformed feed is worse than none
+              ch = ET.parse(f).getroot().find("channel")
+              if ch is None or not ch.findtext("title"):
+                  sys.exit(f"{f}: no channel title")
+              for it in ch.findall("item"):
+                  parsedate_to_datetime(it.findtext("pubDate"))   # valid RFC-822
+                  if it.find("guid") is None:
+                      sys.exit(f"{f}: an item with no guid would re-notify every reader")
+                  items += 1
+          print(f"{len(files)} feeds, {items} items, all well formed")
+          if not items:
+              sys.exit("every feed is empty — refusing to publish")
           PY
 
       - uses: actions/upload-pages-artifact@v3

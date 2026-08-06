@@ -37,7 +37,8 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+from email.utils import format_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -1412,7 +1413,168 @@ def _strip_abstracts(feed: dict) -> dict:
     return out
 
 
-def write_snapshot(path: str, force: bool = False, public: bool = False) -> str:
+# ---------------------------------------------------------------------------
+# Standing queries, as RSS
+# ---------------------------------------------------------------------------
+# The one thing this classifier can do that a PubMed alert cannot: say "an RCT
+# appeared in shoulder arthroplasty" on the day the DOI registers, weeks before
+# NLM assigns a publication type. That is worth nothing while it sits on a page
+# somebody has to remember to open, so every field × design combination is also
+# a feed URL. No accounts, no server, no email: static XML a reader already
+# checks, rebuilt by the same daily Actions run that builds the page.
+
+BASE_URL = os.environ.get(
+    "ORTHOBRIEF_BASE_URL", "https://egldbrg12.github.io/orthobrief").rstrip("/")
+
+# The strongest standing query in the set, so it gets a name instead of having
+# to be assembled: the designs that change practice.
+EVIDENCE_KEYS = ("rct", "sysrev")
+
+FEED_WINDOW_DAYS = 14        # already fetched for the snapshot — no extra calls
+FEED_ITEMS_MAX = 100         # a fortnight of everything is a firehose
+
+
+def _rfc822(iso: str) -> str:
+    """RSS wants RFC-822 dates, in English, whatever the builder's locale."""
+    try:
+        d = datetime.strptime(iso[:10], "%Y-%m-%d").replace(
+            hour=12, tzinfo=timezone.utc)
+    except Exception:  # noqa: BLE001 - a missing date shouldn't lose the item
+        d = datetime.now(timezone.utc)
+    return format_datetime(d)
+
+
+def _item_link(p: dict) -> str:
+    """Never link a DOI the registry has never heard of — it 404s at doi.org."""
+    if p.get("doi") and p.get("doi_ok") is not False:
+        return "https://doi.org/" + urllib.parse.quote(str(p["doi"]), safe="/")
+    if p.get("pmid"):
+        return f"https://pubmed.ncbi.nlm.nih.gov/{p['pmid']}/"
+    return p.get("url") or BASE_URL
+
+
+def _item_guid(p: dict) -> str:
+    """Stable across rebuilds, or every daily build re-notifies every reader."""
+    if p.get("doi"):
+        return "doi:" + str(p["doi"])
+    if p.get("pmid"):
+        return "pmid:" + str(p["pmid"])
+    return "title:" + re.sub(r"[^a-z0-9]", "", (p.get("title") or "").lower())[:60]
+
+
+def _cdata(s: str) -> str:
+    return "<![CDATA[" + str(s or "").replace("]]>", "]]&gt;") + "]]>"
+
+
+def render_rss(papers: list[dict], *, title: str, description: str, path: str) -> bytes:
+    """One standing query as an RSS 2.0 document."""
+    esc = lambda s: htmllib.escape(str(s or ""), quote=True)  # noqa: E731
+    self_url = f"{BASE_URL}/feeds/{path}"
+    now = format_datetime(datetime.now(timezone.utc))
+
+    out = ['<?xml version="1.0" encoding="UTF-8"?>',
+           '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"'
+           ' xmlns:dc="http://purl.org/dc/elements/1.1/">', "<channel>",
+           f"<title>{esc(title)}</title>",
+           f"<link>{esc(BASE_URL)}/</link>",
+           f"<description>{esc(description)}</description>",
+           "<language>en</language>",
+           f"<lastBuildDate>{now}</lastBuildDate>",
+           "<ttl>720</ttl>",
+           f'<atom:link href="{esc(self_url)}" rel="self" type="application/rss+xml"/>']
+
+    for p in papers[:FEED_ITEMS_MAX]:
+        st = p.get("study") or {}
+        fields = ", ".join(FIELD_LABELS.get(k, k) for k in (p.get("fields") or {}).get("all", []))
+        bits = [b for b in (p.get("journal"), st.get("label"), fields) if b]
+        body = "<p>" + esc(" · ".join(bits)) + "</p>"
+        if p.get("summary"):
+            body += "<p>" + esc(p["summary"]) + "</p>"
+        if p.get("authors_short"):
+            body += "<p><em>" + esc(p["authors_short"]) + "</em></p>"
+
+        out += ["<item>",
+                f"<title>{esc(p.get('title'))}</title>",
+                f"<link>{esc(_item_link(p))}</link>",
+                f'<guid isPermaLink="false">{esc(_item_guid(p))}</guid>',
+                f"<pubDate>{_rfc822(p.get('date') or '')}</pubDate>",
+                f"<description>{_cdata(body)}</description>"]
+        for a in (p.get("authors") or [])[:8]:
+            out.append(f"<dc:creator>{esc(a)}</dc:creator>")
+        if st.get("label"):
+            out.append(f"<category>{esc(st['label'])}</category>")
+        for k in (p.get("fields") or {}).get("all", []):
+            out.append(f"<category>{esc(FIELD_LABELS.get(k, k))}</category>")
+        out.append("</item>")
+
+    out += ["</channel>", "</rss>", ""]
+    return "\n".join(out).encode("utf-8")
+
+
+def write_feeds(dirpath: str, feed: dict) -> list[str]:
+    """Every field × design combination, plus the useful shorthands.
+
+    Most of these are empty most days, and that is the point of a standing
+    query: nothing arrives until the thing you asked about appears.
+    """
+    papers = sorted(feed.get("papers") or [],
+                    key=lambda p: str(p.get("date") or ""), reverse=True)
+    design_label = {t["key"]: t["label"] for t in STUDY_TYPES}
+    written: list[str] = []
+
+    def emit(rel: str, subset: list[dict], title: str, desc: str) -> None:
+        full = os.path.join(dirpath, rel)
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        with open(full, "wb") as fh:
+            fh.write(render_rss(subset, title=title, description=desc, path=rel))
+        written.append(rel)
+
+    def of_field(key: str) -> list[dict]:
+        return [p for p in papers if key in (p.get("fields") or {}).get("all", [])]
+
+    def of_design(pool: list[dict], keys: tuple[str, ...]) -> list[dict]:
+        return [p for p in pool if (p.get("study") or {}).get("key") in keys]
+
+    since = f"Papers from the last {FEED_WINDOW_DAYS} days, rebuilt daily."
+    emit("all.xml", papers, "OrthoBrief", f"Today's orthopaedic literature. {since}")
+    emit("evidence.xml", of_design(papers, EVIDENCE_KEYS),
+         "OrthoBrief · RCTs and systematic reviews",
+         f"Randomized trials and systematic reviews across orthopaedics. {since}")
+
+    for t in STUDY_TYPES:
+        emit(f"design/{t['key']}.xml", of_design(papers, (t["key"],)),
+             f"OrthoBrief · {t['label']}",
+             f"{t['long']}, across all of orthopaedics. {since}")
+
+    for f in FIELDS:
+        pool = of_field(f["key"])
+        emit(f"field/{f['key']}.xml", pool, f"OrthoBrief · {f['label']}",
+             f"{f['blurb']}. {since}")
+        emit(f"field/{f['key']}-evidence.xml", of_design(pool, EVIDENCE_KEYS),
+             f"OrthoBrief · {f['label']} · RCTs and systematic reviews",
+             f"Randomized trials and systematic reviews in {f['label'].lower()}. {since}")
+        for t in STUDY_TYPES:
+            emit(f"field/{f['key']}-{t['key']}.xml", of_design(pool, (t["key"],)),
+                 f"OrthoBrief · {f['label']} · {t['label']}",
+                 f"{t['long']} in {f['label'].lower()}. {since}")
+
+    return written
+
+
+def _serve_feed(rel: str, force: bool = False) -> bytes:
+    """One standing query, built on demand for the development server."""
+    import tempfile
+    feed = _strip_abstracts(build_feed(FEED_WINDOW_DAYS, force))
+    with tempfile.TemporaryDirectory() as tmp:
+        written = set(write_feeds(tmp, feed))
+        if rel not in written:
+            raise FileNotFoundError(f"no such feed: {rel}")
+        with open(os.path.join(tmp, rel), "rb") as fh:
+            return fh.read()
+
+
+def write_snapshot(path: str, force: bool = False, public: bool = False,
+                   rss_dir: str = "") -> str:
     """Render a standalone file with every window pre-fetched.
 
     Needed because browsers that force HTTPS refuse to talk to a local HTTP
@@ -1425,6 +1587,13 @@ def write_snapshot(path: str, force: bool = False, public: bool = False) -> str:
         feeds[str(days)] = _strip_abstracts(feed) if public else feed
     with open(path, "wb") as fh:
         fh.write(render_page(feeds["1"], feeds))
+
+    # The standing-query feeds ride along on the widest window already in hand,
+    # so publishing them costs no extra calls to anybody's API.
+    if rss_dir:
+        widest = feeds[str(FEED_WINDOW_DAYS)]
+        written = write_feeds(rss_dir, widest)
+        print(f"  {len(written)} feeds → {rss_dir}", file=sys.stderr)
     return path
 
 
@@ -1468,12 +1637,19 @@ class Handler(BaseHTTPRequestHandler):
                 feed = select_fields(build_feed(days, force), selected)
                 self._send(json.dumps(feed, ensure_ascii=False).encode("utf-8"),
                            "application/json; charset=utf-8")
+            elif parsed.path.startswith("/feeds/") and parsed.path.endswith(".xml"):
+                # Served from memory rather than from disk, so a standing query
+                # can be tested here exactly as it will be published.
+                self._send(_serve_feed(parsed.path[len("/feeds/"):], force),
+                           "application/rss+xml; charset=utf-8")
             elif parsed.path == "/healthz":
                 self._send(b"ok", "text/plain")
             else:
                 self._send(b"Not found", "text/plain", 404)
         except BrokenPipeError:
             pass
+        except FileNotFoundError as exc:
+            self._send(str(exc).encode(), "text/plain", 404)
         except Exception as exc:  # noqa: BLE001
             self._send(f"OrthoBrief error: {exc}".encode(), "text/plain", 500)
 
@@ -1688,6 +1864,8 @@ def main() -> None:
                     metavar="PATH", help="write a standalone offline HTML file and exit")
     ap.add_argument("--public", action="store_true",
                     help="with --snapshot: omit publishers' abstracts (for a published build)")
+    ap.add_argument("--feeds", metavar="DIR", default="",
+                    help="with --snapshot: also write the standing-query RSS feeds there")
     ap.add_argument("--port", type=int, default=PORT)
     args = ap.parse_args()
 
@@ -1699,7 +1877,7 @@ def main() -> None:
         return
     if args.snapshot:
         os.makedirs(os.path.dirname(os.path.abspath(args.snapshot)) or ".", exist_ok=True)
-        path = write_snapshot(args.snapshot, args.refresh, args.public)
+        path = write_snapshot(args.snapshot, args.refresh, args.public, args.feeds)
         size = os.path.getsize(path) / 1024
         print(f"\n  Wrote {path} ({size:.0f} KB)\n  Open it directly — no server needed.\n")
         return

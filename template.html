@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OrthoBrief — today's orthopaedic literature</title>
+<link rel="alternate" type="application/rss+xml" title="OrthoBrief — all papers"
+      href="feeds/all.xml">
+<link rel="alternate" type="application/rss+xml"
+      title="OrthoBrief — RCTs and systematic reviews" href="feeds/evidence.xml">
 <script>
   /* Runs before first paint, so an explicit choice never flashes the other
      theme on the way in. */
@@ -445,6 +449,27 @@
 
   .no-abs{color:var(--ink-3);font-size:13px;font-style:italic;margin:10px 0 0}
 
+  /* ---------- subscribe ---------- */
+  .subscribe{
+    margin:14px 0 4px;padding:16px 18px;background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;max-width:620px;
+  }
+  .sub-head{display:flex;align-items:baseline;gap:12px}
+  .sub-head h4{margin:0;font-size:14px}
+  .sub-head .linkbtn{margin-left:auto;font-size:12.5px}
+  .sub-why{margin:6px 0 12px;color:var(--ink-3);font-size:12.5px;line-height:1.5}
+  .sub-picks{display:flex;gap:12px;flex-wrap:wrap}
+  .sub-picks label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink-3)}
+  .sub-picks select{
+    background:var(--panel-2);border:1px solid var(--line);color:var(--ink);
+    font:inherit;font-size:13px;padding:7px 9px;border-radius:9px;
+  }
+  .sub-url{margin:12px 0 10px;padding:9px 11px;background:var(--panel-2);
+           border-radius:9px;overflow-x:auto}
+  .sub-url code{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);white-space:nowrap}
+  .sub-acts{display:flex;gap:8px;align-items:center}
+  .sub-acts .ghost{text-decoration:none;display:inline-flex;align-items:center}
+
   /* ---------- states ---------- */
   .empty{text-align:center;padding:70px 20px;color:var(--ink-3)}
   .empty h3{font-family:var(--serif);font-size:21px;color:var(--ink);margin:0 0 8px;font-weight:600}
@@ -599,6 +624,37 @@
       </span>
       <button class="linkbtn" id="refresh">Refresh now</button>
       <button class="linkbtn" id="editProfile">Edit your interests</button>
+      <button class="linkbtn" id="subscribeBtn">Subscribe to this search</button>
+    </div>
+
+    <!-- A standing query: the page you are looking at, as a feed that arrives.
+         Every field × design pair is a static file, so the URL can be composed
+         here with nothing behind it. -->
+    <div class="subscribe" id="subscribe" hidden>
+      <div class="sub-head">
+        <h4>Subscribe to this search</h4>
+        <button class="linkbtn" id="subClose">Close</button>
+      </div>
+      <p class="sub-why">Papers matching a subspecialty and a study design, as an
+        RSS feed your reader checks for you. We tag the design from the abstract
+        on the day the DOI appears — weeks before PubMed assigns one — so this is
+        the alert PubMed can't send you. No account, nothing to confirm.</p>
+      <div class="sub-picks">
+        <label>Subspecialty
+          <select id="subField"><option value="">All of orthopaedics</option></select>
+        </label>
+        <label>Study design
+          <select id="subDesign">
+            <option value="">Any design</option>
+            <option value="evidence">RCTs and systematic reviews</option>
+          </select>
+        </label>
+      </div>
+      <div class="sub-url"><code id="subUrl"></code></div>
+      <div class="sub-acts">
+        <button class="ghost" id="subCopy">Copy feed URL</button>
+        <a class="ghost" id="subOpen" target="_blank" rel="noopener">Open it</a>
+      </div>
     </div>
     <p class="fnote">
       Sources: <a href="https://api.crossref.org" target="_blank" rel="noopener">Crossref REST API</a> ·
@@ -1700,6 +1756,56 @@ document.getElementById("obNext").addEventListener("click", () => {
 });
 document.getElementById("obSkip").addEventListener("click", () => obClose(false));
 document.getElementById("editProfile").addEventListener("click", obOpen);
+
+/* ---------- standing queries ---------- */
+/* Every field × design pair is a file the daily build writes, so the URL is
+   composable here and the panel needs nothing behind it. The design tag is the
+   point: it comes off the abstract the day the DOI registers, weeks before NLM
+   assigns a publication type, which is why this is an alert PubMed cannot send.
+   Relative to this page, so it works on localhost, from file://, and live. */
+function feedUrl(field, design){
+  const rel = !field
+    ? (design === "evidence" ? "feeds/evidence.xml"
+       : design ? `feeds/design/${design}.xml` : "feeds/all.xml")
+    : design ? `feeds/field/${field}-${design}.xml` : `feeds/field/${field}.xml`;
+  return new URL(rel, location.href.replace(/[^/]*$/, "")).href;
+}
+
+function syncSubscribe(){
+  const f = document.getElementById("subField").value;
+  const d = document.getElementById("subDesign").value;
+  const url = feedUrl(f, d);
+  document.getElementById("subUrl").textContent = url;
+  document.getElementById("subOpen").href = url;
+}
+
+function openSubscribe(){
+  const fSel = document.getElementById("subField");
+  const dSel = document.getElementById("subDesign");
+  if(fSel.options.length <= 1){
+    FIELDS_META.forEach(f => fSel.add(new Option(f.label, f.key)));
+    (state.feed.study_types || []).forEach(t => dSel.add(new Option(t.label, t.key)));
+  }
+  /* Open on what the reader is already looking at: one field selected in the
+     picker, and whichever design chip is active. */
+  fSel.value = state.fields.length === 1 ? state.fields[0] : "";
+  dSel.value = state.type || "";
+  syncSubscribe();
+  const box = document.getElementById("subscribe");
+  box.hidden = false;
+  box.scrollIntoView({behavior: "smooth", block: "nearest"});
+}
+
+document.getElementById("subscribeBtn").addEventListener("click", openSubscribe);
+document.getElementById("subClose").addEventListener("click",
+  () => { document.getElementById("subscribe").hidden = true; });
+document.getElementById("subField").addEventListener("change", syncSubscribe);
+document.getElementById("subDesign").addEventListener("change", syncSubscribe);
+document.getElementById("subCopy").addEventListener("click", () => {
+  navigator.clipboard.writeText(document.getElementById("subUrl").textContent)
+    .then(() => toast("Feed URL copied — paste it into your reader"))
+    .catch(() => toast("Couldn't copy — your browser blocked it"));
+});
 async function runPiSearch(){
   const q = (document.getElementById("piInput").value || "").trim();
   if(!q) return;
