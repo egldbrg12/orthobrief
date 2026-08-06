@@ -245,6 +245,31 @@ NOT_ORTHO_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Veterinary orthopaedics is a real and serious literature. It is not this one.
+# The topic queries ask PubMed about fractures and arthroplasty without saying
+# "in people", so they return tibial fractures in miniature donkeys and shoulder
+# anatomy in the southern giant anteater. Matched on the journal, which is the
+# only reliable signal — "canine" in a title can equally be an animal model of a
+# human problem, published in a human journal, which belongs here.
+VET_JOURNAL_RE = re.compile(
+    r"\bvet\b|\bveterinar(y|ian)|^animals?\b|\bequine\b|\bcanine\b|\bfeline\b"
+    r"|\bavian\b|\bpoultry\b|\bzoo\b|\bwildlife\b|\baquaculture\b|small anim",
+    re.IGNORECASE,
+)
+
+# The other half: a veterinary paper in a journal whose name doesn't say so.
+# Only consulted outside the orthopaedic journal list, so an animal *model* in
+# JBJS or AJSM is untouched. Companion and exotic species only — sheep, goats,
+# pigs and calves are the standard large-animal models and tissue sources for
+# human work ("decellularized meniscus substitutes from sheep and camels" is an
+# orthopaedic materials paper), so naming one says nothing about the patient.
+# `kids` is left out for the obvious reason.
+VET_SUBJECT_RE = re.compile(
+    r"\b(dogs?|bitches|puppies|cats?|kittens?|horses?|foals?|ponies|pony"
+    r"|donkeys?|mules?|ferrets?|parrots?|tortoises?|anteaters?|elephants?)\b",
+    re.IGNORECASE,
+)
+
 # Front matter that is not a paper at all.
 JUNK_TITLE_RE = re.compile(
     r"^\s*(journal )?(cme|continuing medical education) (instructions|questions)"
@@ -274,6 +299,8 @@ def classify_fields(paper: dict) -> dict:
     title = paper.get("title") or ""
     if JUNK_TITLE_RE.search(title):
         return {"primary": "", "all": []}
+    if VET_JOURNAL_RE.search(paper.get("journal") or ""):
+        return {"primary": "", "all": []}
 
     dedicated: list[str] = []
     for issn in paper.get("issns") or []:
@@ -286,6 +313,8 @@ def classify_fields(paper: dict) -> dict:
     # cue buried in an abstract is how a vascular limb-salvage series or a
     # maxillofacial fracture paper ends up in an orthopaedic feed.
     if not in_ortho_journal and NOT_ORTHO_RE.search(title):
+        return {"primary": "", "all": []}
+    if not in_ortho_journal and VET_SUBJECT_RE.search(title):
         return {"primary": "", "all": []}
 
     body, _ = split_evidence(paper.get("abstract") or "")

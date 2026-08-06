@@ -64,6 +64,20 @@ paper paediatric. Papers from *outside* orthopaedics have to announce themselves
 in the title, which is what keeps a vascular limb-salvage series or a
 maxillofacial fracture paper out of the feed.
 
+**Veterinary papers are dropped outright**, on the journal. The topic queries ask
+PubMed about fractures and arthroplasty without saying "in people", so they used
+to return tibial fractures in miniature donkeys and the radiological anatomy of
+the southern giant anteater's shoulder — eleven papers in a fortnight. A second
+rule catches veterinary work in journals whose names don't say so, but only for
+companion and exotic species: sheep, goats, pigs and calves are the standard
+large-animal models and tissue sources for *human* work, so naming one says
+nothing about who the patient was.
+
+Animal *models* stay. A rat model of tendon healing in *AJSM* is orthopaedic
+research and belongs in an orthopaedic feed — roughly 4% of a fortnight, most of
+it already tagged **Basic science** or **Biomechanics**, which is how you skip it
+if you want to.
+
 The **Fields** button opens the picker; the choice is saved in `localStorage`, so
 it's per-device and needs no account. Everything is on until you narrow it.
 
