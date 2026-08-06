@@ -147,9 +147,30 @@ Extractive, not generated — deterministic, offline, and $0.
 - **Structured abstract** → pulls the `CONCLUSIONS` section, prepended with the
   single most quantitative sentence from `RESULTS` (one carrying a %, p-value,
   CI, or n).
+- **Structured, but with no conclusion** — a trial protocol, a case report, a
+  narrative review — → takes `DISCUSSION`, `EXPERT OPINION`, `CLINICAL
+  RELEVANCE` or `OBSERVATIONS`, then `RESULTS`, in that order. It used to fall
+  straight through to sentence scoring, and since that rewards whatever comes
+  last, a protocol's summary was its ethics statement: *"This study received
+  approval from the French Committee of Person Protection North-West II."* A
+  protocol now leads with what the trial is testing, which is the only news it
+  has.
 - **Unstructured abstract** → scores every sentence (numbers and result language
-  score up; "the purpose of this study was…" scores down; late sentences get a
-  positional bonus), keeps the best two in reading order.
+  score up; "the purpose of this study was…" and registration numbers score
+  down; late sentences get a positional bonus), keeps the best two in reading
+  order. Trailing `LEVEL OF EVIDENCE:` and `TRIAL REGISTRATION:` boilerplate is
+  cut first, because in an otherwise unstructured abstract it isn't a section —
+  it's just the last sentence, where the summariser is looking.
+
+Sections that are administration rather than findings — ethics, registration,
+funding, data availability, conflicts — are never summary material, and
+`SUMMARY` only counts as a conclusion when that is the whole label: *Spine*
+calls its background `SUMMARY OF BACKGROUND DATA`, and reading that as the
+finding inverts the paper.
+
+Measured over a 14-day window (1168 abstracts): section labels leaking into the
+summary 13 → 0, administrative text leading the summary 2 → 0, no summary made
+worse, and no change to any study-design or subspecialty tag.
 
 They're labelled *Summary* in the UI and capped at ~340 characters. Nothing is
 paraphrased, so nothing is hallucinated — but they're a triage aid, not a

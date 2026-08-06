@@ -413,8 +413,32 @@ def normalize_title(title: str) -> str:
 
 SECTION_RE = re.compile(r"\b([A-Z][A-Z][A-Z /&'\-]{2,}?)\s*[:\.]\s+")
 
-CONCLUSION_KEYS = ("CONCLUSION", "INTERPRETATION", "DISCUSSION", "SUMMARY")
+CONCLUSION_KEYS = ("CONCLUSION", "INTERPRETATION")
 RESULT_KEYS = ("RESULT", "FINDING", "OUTCOME")
+# Where the answer lives when a paper has no conclusion to give: protocols,
+# case reports, narrative reviews. In preference order.
+FALLBACK_KEYS = ("DISCUSSION", "EXPERT OPINION", "CLINICAL RELEVANCE", "OBSERVATIONS",
+                 "LESSONS", "IMPLICATIONS", "RECOMMENDATION")
+# "SUMMARY" alone is a conclusion; "SUMMARY OF BACKGROUND DATA" is what Spine
+# calls its background, and reading that as the finding inverts the paper.
+CONCLUSION_EXACT = ("SUMMARY", "SUMMARY AND CONCLUSION", "SUMMARY AND CONCLUSIONS")
+
+# Administration, not findings. A trial protocol's last section is its ethics
+# statement, and a summary that leads with which committee approved the study
+# tells a reader nothing about the trial.
+ADMIN_SECTION_RE = re.compile(
+    r"ETHIC|DISSEMINAT|REGISTRAT|REGISTERED|FUNDING|DATA AVAILABILIT|ACKNOWLEDG"
+    r"|COMPETING|CONFLICT|TRIAL STATUS|PROTOCOL VERSION|SUPPLEMENT|LEVEL OF EVIDENCE",
+    re.IGNORECASE,
+)
+# The same thing at sentence level, for abstracts with no sections at all.
+_ADMIN_SENT_RE = re.compile(
+    r"clinicaltrials\.gov|\bNCT\d{6,}|\bCRD42\d+|\bPROSPERO\b|institutional review board"
+    r"|ethics committee|ethical approval|received approval|informed consent"
+    r"|registered (at|with|in|on)|this (study|trial) (was|is) registered"
+    r"|conflict of interest|the authors declare",
+    re.IGNORECASE,
+)
 
 _QUANT_RE = re.compile(r"(\d+(\.\d+)?\s?%|p\s?[=<>]\s?0?\.\d+|95%\s?CI|\bOR\b|\bHR\b|\bn\s?=\s?\d+|\d{3,})")
 _SIGNAL_RE = re.compile(
@@ -443,9 +467,14 @@ def parse_sections(abstract: str) -> dict[str, str]:
     return out
 
 
-def _first_match(sections: dict[str, str], keys: tuple[str, ...]) -> str:
+def _first_match(sections: dict[str, str], keys: tuple[str, ...],
+                 exact: tuple[str, ...] = ()) -> str:
+    """First section matching `keys`, never an administrative one."""
     for label, body in sections.items():
-        if any(k in label.upper() for k in keys):
+        up = label.upper().strip()
+        if ADMIN_SECTION_RE.search(up):
+            continue
+        if up in exact or any(k in up for k in keys):
             return body
     return ""
 
@@ -466,25 +495,54 @@ def _trim(sentences: list[str], limit: int = 340) -> str:
     return text
 
 
+# Trailers journals append after the science is over. They aren't sections in
+# their own right when an abstract is otherwise unstructured, so they survive
+# into the last sentence — which is exactly where the summariser looks.
+_TRAILER_RE = re.compile(
+    r"\s*(LEVEL OF EVIDENCE|LEVELS? OF EVIDENCE|TRIAL REGISTRATION( NUMBER)?"
+    r"|CLINICAL TRIAL REGISTRATION|REGISTRATION|PROSPERO REGISTRATION"
+    r"|DATA AVAILABILITY)\s*[:\.].*$",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
 def summarize(abstract: str, title: str = "") -> str:
     """Two-sentence gist of a paper. Prefers conclusion + hardest number."""
     abstract = clean_text(abstract)
     if not abstract:
         return ""
+    if not parse_sections(abstract):
+        abstract = _TRAILER_RE.sub("", abstract).strip() or abstract
     if len(abstract) < 320:
         return abstract  # already short enough to be its own summary
 
     sections = parse_sections(abstract)
+    prose = abstract
     if sections:
-        concl = split_sentences(_first_match(sections, CONCLUSION_KEYS))[:2]
+        concl = split_sentences(_first_match(sections, CONCLUSION_KEYS, CONCLUSION_EXACT))[:2]
         results = split_sentences(_first_match(sections, RESULT_KEYS))
         quant = next((s for s in results if _QUANT_RE.search(s)), "")
         if concl:
             picked = concl if not quant else [quant] + concl[:1]
             return _trim(picked)
 
+        # No conclusion at all — a protocol, a case report, a narrative review.
+        # Take whatever the paper offers instead, in order, rather than dropping
+        # to a positional guess that rewards whatever happens to be last.
+        other = split_sentences(_first_match(sections, FALLBACK_KEYS))[:2]
+        if other:
+            return _trim(other)
+        if results:
+            return _trim(([quant] if quant else []) + [s for s in results if s != quant][:2])
+
+        # Still nothing. Score the sections that are worth summarising — the
+        # bodies only, so a label can never leak into the summary, and without
+        # the ethics statement the positional bonus used to reward.
+        prose = " ".join(b for l, b in sections.items()
+                         if not ADMIN_SECTION_RE.search(l.upper())) or abstract
+
     # Unstructured: score every sentence and keep the best two, in reading order.
-    sents = split_sentences(abstract)
+    sents = split_sentences(prose)
     if not sents:
         return _trim([abstract])
     n = len(sents)
@@ -497,6 +555,8 @@ def summarize(abstract: str, title: str = "") -> str:
             score += 2.0
         if _BACKGROUND_RE.search(s):
             score -= 2.5
+        if _ADMIN_SENT_RE.search(s):
+            score -= 4.0        # a registration number is never the finding
         if i >= n - 2:            # conclusions live at the end
             score += 1.5
         elif i >= (2 * n) // 3:
