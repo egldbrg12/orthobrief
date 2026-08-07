@@ -225,12 +225,27 @@ To swap in an LLM instead, replace `summarize()` in `app.py`; it takes
   subspecialty and date follow the authors in a single grey line, because above
   the title they competed with it for the same glance. An untagged paper that
   isn't new drops the row above the title entirely rather than leaving a gap.
-- **On a phone the toolbar is two rows, not four.** The desktop toolbar doesn't
-  shrink, it wraps, which used to stack six rows and a third of the screen above
-  the first paper. Below 620px the tagline goes, the search box shares a row
-  with All/Unread/Saved, and the window pills sit with Filters on the row under
-  it — every control still one tap away. The card footer loses its printed DOI
-  and PMID there too: `@media (hover:none)` means it's always open on touch, and
+- **On a phone the controls collapse into one menu.** The desktop toolbar
+  doesn't shrink, it wraps, which used to stack six rows and a third of the
+  screen above the first paper. Below 620px there is a single bar — logo, search,
+  ☰ — with All/Unread/Saved on the row beneath it, and everything else that
+  narrows the feed lives in a bottom sheet: the window, the subspecialties and
+  the study designs, which were always the same idea split across a popover and
+  two pill rows for no reason but desktop space. The first paper starts about
+  60px down instead of 250.
+
+  Two decisions worth keeping. The ☰ carries a **badge counting the narrowings
+  in force**, because hiding controls is only honest if the reader can see that
+  something is hidden. And *which papers* — All/Unread/Saved — stays on screen
+  rather than going in the sheet: Unread is the reason to come back, and a mode
+  nobody can see is a mode nobody uses. The sheet closes on Done, on the scrim,
+  on Escape and on a downward swipe.
+
+  The controls are **moved, not duplicated**: one set of nodes, one set of
+  handlers, relocated by a `matchMedia` listener and moved back above the
+  breakpoint. A second copy would drift the moment either changed.
+- **The card footer loses its printed DOI and PMID on a phone.**
+  `@media (hover:none)` means it's always open on touch, and
   two lines of monospace identifiers on every card is not what a phone reader
   came for. The buttons stay, Copy DOI among them, and an *unregistered* DOI
   still shows, because that one is a warning rather than an identifier.

@@ -493,6 +493,82 @@
   .fnote{margin:0;line-height:1.6;max-width:64ch}
   footer a{color:var(--ink-2)}
 
+  /* ---------- the phone menu ---------- */
+  /* Off entirely above the breakpoint: on a desktop the toolbar fits on one
+     row and a menu would be a step backwards. */
+  .mbar, .mviews, .msheet, .mscrim{ display:none }
+
+  @media (max-width:620px){
+    /* Their children have moved into .mbar and the sheet; what is left is the
+       tagline and the datestamp, which the stats line already covers. */
+    .masthead, .toolbar{ display:none }
+
+    .mbar{ display:flex; align-items:center; gap:9px; padding:11px 0 }
+    .mbar .logo{ font-size:19px; gap:7px; flex:0 0 auto }
+    .mbar .logo .mark{ width:21px; height:21px; font-size:11.5px; border-radius:6px }
+    .mbar .search{ flex:1 1 auto; min-width:0; border-radius:9px; order:0 }
+    .mbar .search input{ font-size:13px; padding:7px 0 }
+
+    .mburger{
+      flex:0 0 auto; width:38px; height:34px; border-radius:9px; cursor:pointer;
+      background:var(--panel); border:1px solid var(--line); padding:0;
+      display:grid; place-content:center; gap:4px; position:relative;
+    }
+    .mburger i{ display:block; width:16px; height:2px; border-radius:2px; background:var(--ink-2) }
+    /* Hiding controls is only honest if the reader can see that something is
+       hidden. The badge counts the narrowings currently in force. */
+    .mcount{
+      position:absolute; top:-6px; right:-6px; min-width:17px; height:17px;
+      border-radius:9px; background:var(--accent); color:var(--accent-ink);
+      font-size:10.5px; font-weight:700; display:grid; place-items:center; padding:0 4px;
+    }
+
+    /* Which papers you are looking at stays on screen. Unread is the reason to
+       come back, and a mode nobody can see is a mode nobody uses. */
+    .mviews{ display:block; padding:0 0 10px }
+    .mviews .pills{ display:grid; grid-template-columns:repeat(3,1fr); gap:3px; padding:3px }
+    .mviews .pills button{ padding:7px 6px; font-size:12.5px; text-align:center }
+    .fieldsbtn{ display:none !important }
+
+    .mscrim{ display:block; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:40 }
+    .mscrim[hidden], .msheet[hidden]{ display:none }
+    .msheet{
+      display:block; position:fixed; left:0; right:0; bottom:0; z-index:41;
+      max-height:82vh; overflow-y:auto; background:var(--bg);
+      border-top:1px solid var(--line); border-radius:18px 18px 0 0;
+      padding:8px 16px calc(18px + env(safe-area-inset-bottom));
+      box-shadow:0 -18px 44px rgba(0,0,0,.28);
+    }
+    .mgrip{ width:38px; height:4px; border-radius:2px; background:var(--line-2); margin:6px auto 12px }
+    .mshead{ display:flex; align-items:baseline; gap:10px; margin-bottom:4px }
+    .mshead b{ font-size:15px; font-family:var(--serif) }
+    .mdone{
+      margin-left:auto; font:inherit; font-size:13px; font-weight:600; cursor:pointer;
+      background:var(--accent); color:var(--accent-ink); border:0;
+      border-radius:8px; padding:7px 15px;
+    }
+    .mgroup{ padding:13px 0 4px; border-top:1px solid var(--line); margin-top:11px }
+    .mgroup:first-of-type{ border-top:0; margin-top:0 }
+    .mgroup h5{
+      margin:0 0 9px; font-size:11px; letter-spacing:.07em; text-transform:uppercase;
+      color:var(--ink-3); font-weight:600;
+    }
+    /* Full-width targets: a pill row sized for a mouse is a row of misses. */
+    .msheet .pills{ display:grid; grid-template-columns:repeat(4,1fr); gap:3px; padding:3px }
+    .msheet .pills button{ padding:9px 6px; font-size:13px; text-align:center }
+    /* The picker is a popover elsewhere — fixed width, its own scroll, its own
+       shadow. Inside the sheet it is just content. */
+    .msheet .picker{
+      position:static; display:block; width:auto; max-height:none; overflow:visible;
+      border:0; box-shadow:none; padding:0; background:none;
+    }
+    .msheet .picker .sect + .sect{ margin-top:14px; padding-top:0; border-top:0 }
+    .msheet .picker .secthead h4{
+      font-size:11px; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-3);
+    }
+    .msheet .picker label{ padding:8px 2px }
+  }
+
   /* ---------- phones ---------- */
   /* The desktop toolbar doesn't shrink, it wraps — which put six stacked rows
      and a third of the screen above the first paper. Nothing here overflows;
@@ -573,6 +649,17 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <div class="wrap">
+    <!-- Phone layout. The logo, the search box and the view pills move in here
+         at ≤620px and move back out above it; everything else that narrows the
+         feed goes into the sheet at the foot of this file. Empty on desktop. -->
+    <div class="mbar" id="mbar">
+      <button class="mburger" id="menuBtn" aria-expanded="false"
+              aria-controls="sheet" aria-label="Views and filters">
+        <i></i><i></i><i></i><span class="mcount" id="menuCount" hidden></span>
+      </button>
+    </div>
+    <div class="mviews" id="mviews"></div>
+
     <div class="masthead">
       <div class="logo"><span class="mark">OB</span>OrthoBrief</div>
       <div class="tagline">today's orthopaedic literature</div>
@@ -617,6 +704,18 @@
   </div>
   <div id="banners"></div>
   <main id="feed"></main>
+  <!-- One place for everything that narrows the feed, on a phone. A bottom
+       sheet rather than a dropdown: it opens under the thumb, and it has room
+       for every control instead of nesting a second menu inside a first. -->
+  <div class="mscrim" id="scrim" hidden></div>
+  <div class="msheet" id="sheet" hidden role="dialog" aria-modal="true"
+       aria-label="Views and filters">
+    <div class="mgrip"></div>
+    <div class="mshead"><b>Show me</b><button class="mdone" id="sheetDone">Done</button></div>
+    <div class="mgroup" id="slotWindow"><h5>How far back</h5></div>
+    <div class="mgroup" id="slotPicker"></div>
+  </div>
+
   <footer>
     <div class="fcontrols">
       <span class="theme" id="theme" role="group" aria-label="Appearance"><span class="lbl">Appearance</span>
@@ -1049,6 +1148,7 @@ function render(){
   renderFieldsPicker();
 
   renderViewCounts();
+  updateMenuBadge();
 
   const end = new Date((f.window.end || new Date().toISOString().slice(0, 10)) + "T12:00:00");
   document.getElementById("datestamp").innerHTML =
@@ -2083,10 +2183,97 @@ document.getElementById("theme").addEventListener("click", e => {
 });
 renderTheme();
 
+/* ---------- the phone menu ---------- */
+/* One layout, two arrangements. Below 620px the logo, search and view pills
+   move into a single bar and everything else that narrows the feed moves into a
+   bottom sheet; above it they move back. Moving the real nodes rather than
+   duplicating them keeps one set of controls, one set of handlers, and one
+   source of truth — a second copy would drift the moment either changed. */
+const PHONE = window.matchMedia("(max-width:620px)");
+const onPhone = () => PHONE.matches;
+
+const HOME = new Map();
+function rememberHome(el){
+  if(el && !HOME.has(el)) HOME.set(el, [el.parentNode, el.nextSibling]);
+}
+function sendHome(el){
+  const home = HOME.get(el);
+  if(home && home[0]) home[0].insertBefore(el, home[1]);
+}
+
+function applyLayout(){
+  const bar = document.getElementById("mbar");
+  const menuBtn = document.getElementById("menuBtn");
+  const logo = document.querySelector(".logo");
+  const search = document.querySelector(".search");
+  const views = document.getElementById("viewPills");
+  const windows = document.getElementById("windowPills");
+  const pick = document.getElementById("fieldsPicker");
+  [logo, search, views, windows, pick].forEach(rememberHome);
+
+  if(onPhone()){
+    bar.insertBefore(logo, menuBtn);
+    bar.insertBefore(search, menuBtn);
+    document.getElementById("mviews").appendChild(views);
+    document.getElementById("slotWindow").appendChild(windows);
+    document.getElementById("slotPicker").appendChild(pick);
+    pick.hidden = false;                 // in the sheet it is content, not a popover
+  }else{
+    [logo, search, views, windows, pick].forEach(sendHome);
+    pick.hidden = true;
+    openSheet(false);
+  }
+  updateMenuBadge();
+}
+
+function openSheet(open){
+  document.getElementById("sheet").hidden = !open;
+  document.getElementById("scrim").hidden = !open;
+  document.getElementById("menuBtn").setAttribute("aria-expanded", String(open));
+  /* Stop the feed scrolling under the sheet — on a phone that reads as the
+     page having jumped when the sheet closes. */
+  document.body.style.overflow = open ? "hidden" : "";
+}
+
+/* What the reader can't see while the menu is shut: how narrowed the feed is. */
+function updateMenuBadge(){
+  const n = (state.fields.length && state.fields.length < FIELDS_META.length ? 1 : 0)
+    + (state.type ? 1 : 0) + (state.days !== 1 ? 1 : 0);
+  const badge = document.getElementById("menuCount");
+  badge.textContent = n ? String(n) : "";
+  badge.hidden = !n;
+}
+
+document.getElementById("menuBtn").addEventListener("click", e => {
+  e.stopPropagation();
+  openSheet(document.getElementById("sheet").hidden);
+});
+document.getElementById("scrim").addEventListener("click", () => openSheet(false));
+document.getElementById("sheetDone").addEventListener("click", () => openSheet(false));
+document.getElementById("sheet").addEventListener("click", e => e.stopPropagation());
+document.addEventListener("keydown", e => {
+  if(e.key === "Escape" && !document.getElementById("sheet").hidden) openSheet(false);
+});
+/* A sheet that can be dragged up should be dismissible by dragging down. */
+(() => {
+  const sheet = document.getElementById("sheet");
+  let from = null;
+  sheet.addEventListener("touchstart", e => {
+    from = sheet.scrollTop <= 0 ? e.touches[0].clientY : null;
+  }, {passive: true});
+  sheet.addEventListener("touchmove", e => {
+    if(from !== null && e.touches[0].clientY - from > 70){ openSheet(false); from = null; }
+  }, {passive: true});
+})();
+
+PHONE.addEventListener("change", applyLayout);
+applyLayout();
+
 /* ---------- fields picker ---------- */
 const picker = document.getElementById("fieldsPicker");
 const fieldsBtn = document.getElementById("fieldsBtn");
 function openPicker(open){
+  if(onPhone()) return;         // inside the sheet it is always open
   picker.hidden = !open;
   fieldsBtn.setAttribute("aria-expanded", String(open));
 }
