@@ -281,8 +281,10 @@ To swap in an LLM instead, replace `summarize()` in `app.py`; it takes
   inline SVG — no icon font, no sprite request, and `currentColor` means they
   follow the theme — with an `aria-label` and tooltip on each, because an icon
   alone is a guess.
-- **`/`** focuses the search box. Filters across title, authors, abstract, and
-  study type.
+- **`/`** focuses the search box, which says *Search OrthoBrief…* rather than
+  listing what it matches. It still searches title, authors, abstract, journal
+  and study type — but a placeholder is read by someone deciding whether to
+  bother, not by someone who wants the field list.
 - **All / Unread / Saved** decide *which* papers are listed. *Unread* is what
   this page hasn't shown you before, so a return visit is a delta rather than
   the same window again — it's about you, not about publication date. *Saved*
