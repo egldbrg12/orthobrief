@@ -533,24 +533,40 @@
     .fieldsbtn{ display:none !important }
 
     .mscrim{ display:block; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:40 }
-    .mscrim[hidden], .msheet[hidden]{ display:none }
+    /* `hidden` is display:none and display cannot be transitioned, so open
+       state is a class. Visibility keeps a shut sheet out of the tab order and
+       away from the pointer; it flips instantly on the way in and waits for the
+       slide to finish on the way out. */
+    .mscrim{ opacity:0; visibility:hidden; transition:opacity .22s ease, visibility 0s .22s }
+    .mscrim.open{ opacity:1; visibility:visible; transition:opacity .22s ease, visibility 0s }
     .msheet{
       display:block; position:fixed; left:0; right:0; bottom:0; z-index:41;
+      transform:translateY(101%); visibility:hidden;
+      /* Decelerating, so it arrives rather than stops — the curve iOS uses for
+         sheets. 101% hides the shadow while it is off-screen. */
+      transition:transform .3s cubic-bezier(.32,.72,0,1), visibility 0s .3s;
       max-height:82vh; overflow-y:auto; background:var(--bg);
       border-top:1px solid var(--line); border-radius:18px 18px 0 0;
       padding:8px 16px calc(18px + env(safe-area-inset-bottom));
       box-shadow:0 -18px 44px rgba(0,0,0,.28);
     }
+    .msheet.open{
+      transform:translateY(0); visibility:visible;
+      transition:transform .3s cubic-bezier(.32,.72,0,1), visibility 0s;
+    }
+    @media (prefers-reduced-motion:reduce){
+      .msheet, .msheet.open, .mscrim, .mscrim.open{ transition-duration:0s }
+    }
     .mgrip{ width:38px; height:4px; border-radius:2px; background:var(--line-2); margin:6px auto 12px }
-    .mshead{ display:flex; align-items:baseline; gap:10px; margin-bottom:4px }
-    .mshead b{ font-size:15px; font-family:var(--serif) }
+    /* Only Done lives here now, so the row is just an anchor for it. */
+    .mshead{ display:flex; justify-content:flex-end; align-items:center; margin:-4px 0 0 }
     .mdone{
       margin-left:auto; font:inherit; font-size:13px; font-weight:600; cursor:pointer;
       background:var(--accent); color:var(--accent-ink); border:0;
       border-radius:8px; padding:7px 15px;
     }
     .mgroup{ padding:13px 0 4px; border-top:1px solid var(--line); margin-top:11px }
-    .mgroup:first-of-type{ border-top:0; margin-top:0 }
+    .mgroup:first-of-type{ border-top:0; margin-top:0; padding-top:6px }
     .mgroup h5{
       margin:0 0 9px; font-size:11px; letter-spacing:.07em; text-transform:uppercase;
       color:var(--ink-3); font-weight:600;
@@ -709,11 +725,11 @@
   <!-- One place for everything that narrows the feed, on a phone. A bottom
        sheet rather than a dropdown: it opens under the thumb, and it has room
        for every control instead of nesting a second menu inside a first. -->
-  <div class="mscrim" id="scrim" hidden></div>
-  <div class="msheet" id="sheet" hidden role="dialog" aria-modal="true"
+  <div class="mscrim" id="scrim"></div>
+  <div class="msheet" id="sheet" role="dialog" aria-modal="true"
        aria-label="Views and filters">
     <div class="mgrip"></div>
-    <div class="mshead"><b>Show me</b><button class="mdone" id="sheetDone">Done</button></div>
+    <div class="mshead"><button class="mdone" id="sheetDone">Done</button></div>
     <div class="mgroup" id="slotWindow"><h5>How far back</h5></div>
     <div class="mgroup" id="slotPicker"></div>
   </div>
@@ -2229,8 +2245,8 @@ function applyLayout(){
 }
 
 function openSheet(open){
-  document.getElementById("sheet").hidden = !open;
-  document.getElementById("scrim").hidden = !open;
+  document.getElementById("sheet").classList.toggle("open", open);
+  document.getElementById("scrim").classList.toggle("open", open);
   document.getElementById("menuBtn").setAttribute("aria-expanded", String(open));
   /* Stop the feed scrolling under the sheet — on a phone that reads as the
      page having jumped when the sheet closes. */
@@ -2248,13 +2264,13 @@ function updateMenuBadge(){
 
 document.getElementById("menuBtn").addEventListener("click", e => {
   e.stopPropagation();
-  openSheet(document.getElementById("sheet").hidden);
+  openSheet(!document.getElementById("sheet").classList.contains("open"));
 });
 document.getElementById("scrim").addEventListener("click", () => openSheet(false));
 document.getElementById("sheetDone").addEventListener("click", () => openSheet(false));
 document.getElementById("sheet").addEventListener("click", e => e.stopPropagation());
 document.addEventListener("keydown", e => {
-  if(e.key === "Escape" && !document.getElementById("sheet").hidden) openSheet(false);
+  if(e.key === "Escape" && document.getElementById("sheet").classList.contains("open")) openSheet(false);
 });
 /* A sheet that can be dragged up should be dismissible by dragging down. */
 (() => {
