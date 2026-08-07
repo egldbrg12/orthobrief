@@ -10,3 +10,6 @@ orthobrief.html
 __pycache__/
 *.pyc
 .DS_Store
+
+# Screenshots from tools/phone.py, if run from the repo root.
+/shot.png

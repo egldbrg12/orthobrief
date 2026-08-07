@@ -318,6 +318,20 @@ returning zero — those are typos or ISSN changes worth fixing in the `JOURNALS
 table. Worth running once. A wrong ISSN degrades gracefully rather than
 failing: PubMed still covers that journal by name.
 
+```bash
+python3 tools/phone.py shot.png          # the page at 390px, as a phone renders it
+python3 tools/phone.py --measure         # anything wider than the viewport, worst first
+python3 tools/phone.py s.png --css=x.css # preview a CSS change before writing it
+```
+
+`tools/phone.py` exists because Chrome will not open a window narrower than
+500px: a screenshot taken at 390 is really a 500px render with the right-hand
+side cropped, which reads as a broken layout that isn't broken — a mistake that
+cost an hour once already. It loads the page in an iframe of the width being
+tested instead, which is a real viewport, so media queries fire and genuine
+overflow is genuinely visible. `--css` and `--js` inject a variant, which is how
+a design change gets looked at before it is written into the template.
+
 `GET /api/papers?days=N&fields=spine,trauma&refresh=1` returns the same JSON the
 page uses. `fields` narrows the payload server-side for API and cron use; the
 page itself loads every field and filters in the browser, so toggling a field is
