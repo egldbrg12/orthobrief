@@ -228,6 +228,15 @@ To swap in an LLM instead, replace `summarize()` in `app.py`; it takes
   still shows, because that one is a warning rather than an identifier.
 - **Window pills** — Today / 3 / 7 / 14 days. Journals publish in bursts, so a
   quiet Sunday is normal; widen the window rather than assuming it's broken.
+- **A window is when a paper reached the indexes, not when it was published.**
+  Crossref registers a DOI the day a paper goes online, but PubMed adds records
+  days to months later — so *Today* routinely holds papers published weeks ago,
+  and on one day carried a February paper indexed 184 days after publication.
+  That is deliberate: filtering on publication date instead would drop a
+  late-indexed paper into a window you have already read past, and you would
+  never see it at all. But dating a February paper "today" is a lie, so a paper
+  that predates the window it sits in shows `published Feb 4, 2026` rather than
+  a bare date, and the count line says how many arrived that way.
 - **Design chips** — filter to one study type; click again to clear. Counts
   respect the search box and journal filter, so they always describe what you're
   actually looking at.

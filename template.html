@@ -763,6 +763,24 @@ function textOf(p){
   return t;
 }
 
+/* A window means "arrived in the indexes", not "was published". Crossref
+   registers a DOI the day a paper goes online, but PubMed adds records days to
+   months later — a paper published in February can land in today's feed, and
+   for a reader who has never seen it that is genuinely today's news.
+   Dating it "today" would be a lie, and showing a bare "Jun 26" inside a tab
+   labelled Today looks like a bug. So when a paper predates the window it is
+   sitting in, the card says which date it is showing. */
+function dateLabel(p){
+  const start = (state.feed.window || {}).start || "";
+  const d = String(p.date || "");
+  return (start && d && d < start) ? "published " + fmtDate(d) : relDay(d);
+}
+
+const arrivedLate = p => {
+  const start = (state.feed.window || {}).start || "";
+  return !!(start && p.date && String(p.date) < start);
+};
+
 /* Renders a structured abstract with its section labels styled. */
 function renderAbstract(a){
   if(!a) return "";
@@ -836,7 +854,7 @@ function paperCard(p){
      Only the design tag stays above the title, because that is the one thing
      here the reader can't get from PubMed. */
   const labels = ((p.fields || {}).all || []).map(k => FIELD_LABEL[k] || k);
-  const bylineText = [p.journal || "Unknown journal", labels.join(" · "), relDay(p.date)]
+  const bylineText = [p.journal || "Unknown journal", labels.join(" · "), dateLabel(p)]
     .filter(Boolean).join(" · ");
   /* An "Unclassified?" chip is us reporting our own miss on the reader's line.
      When we don't know the design, say nothing — absence is the honest signal. */
@@ -1038,11 +1056,19 @@ function render(){
     (f.window.days > 1 ? `<br>window: ${fmtDate(f.window.start)} → ${fmtDate(f.window.end)}` : "");
 
   const what = state.view === "new" ? "you haven't seen before"
-    : state.view === "saved" ? "you saved" : "in this window";
+    : state.view === "saved" ? "you saved" : "added in this window";
   const byMatch = state.sort === "match";
+  /* Say it once, where the count is, rather than on every card that predates
+     the window: a fortnight typically carries a few dozen of these. */
+  const late = state.view === "saved" ? 0 : papers.filter(arrivedLate).length;
+  const lateNote = late
+    ? ` <span class="hintlet" title="A window is when a paper reached Crossref or PubMed. PubMed adds records days to months after a journal publishes, so a paper can be new to the indexes without being newly published.">— ${
+        late} published earlier and indexed since</span>` : "";
   document.getElementById("stats").innerHTML =
+    // "1 of 122 paper" — with an "of N" clause the noun follows the total.
     `<span>${papers.length}${papers.length !== scope.length ? ` of ${scope.length}` : ""} paper${
-      papers.length === 1 ? "" : "s"} ${what}</span>` +
+      (papers.length !== scope.length ? scope.length : papers.length) === 1 ? "" : "s"
+      } ${what}${lateNote}</span>` +
     (state.view === "saved" ? "" : `<span class="sortby"> · ordered by ` +
       `<button class="linkbtn" data-sort="date"${byMatch ? "" : " aria-current=\"true\""}>newest</button> / ` +
       `<button class="linkbtn" data-sort="match"${byMatch ? " aria-current=\"true\"" : ""}>what matches you</button>` +
