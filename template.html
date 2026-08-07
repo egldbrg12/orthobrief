@@ -512,11 +512,11 @@
       background:var(--panel); border:1px solid var(--line); padding:0;
       display:grid; place-content:center; position:relative;
     }
-    /* Three bones rather than three bars — the same shaft-and-condyles
-       construction as the letters in the monogram, laid on its side. At this
-       size the knuckles are barely a pixel each, which is the point: it should
-       read as a menu first and reward a second look. */
-    .mburger .burgerbones{ display:block; width:21px; height:auto; color:var(--ink-2) }
+    /* Three bones rather than three bars — the same drawing as the monogram,
+       traced from the same artwork and laid on its side, stacked with a <use>
+       so the path is stored once. At 22px the knuckles are barely a pixel
+       each: it should read as a menu first and reward a second look. */
+    .mburger .burgerbones{ display:block; width:22px; height:auto; color:var(--ink-2) }
     /* Hiding controls is only honest if the reader can see that something is
        hidden. The badge counts the narrowings currently in force. */
     .mcount{
@@ -657,7 +657,7 @@
     <div class="mbar" id="mbar">
       <button class="mburger" id="menuBtn" aria-expanded="false"
               aria-controls="sheet" aria-label="Views and filters">
-        <svg class="burgerbones" viewBox="0 0 26 22" fill="currentColor" aria-hidden="true"><rect x="3.4" y="2.95" width="19.2" height="2.1" rx="1.05"/><circle cx="3.4" cy="2.85" r="1.8"/><circle cx="3.4" cy="5.15" r="1.8"/><circle cx="22.6" cy="2.85" r="1.8"/><circle cx="22.6" cy="5.15" r="1.8"/><rect x="3.4" y="9.95" width="19.2" height="2.1" rx="1.05"/><circle cx="3.4" cy="9.85" r="1.8"/><circle cx="3.4" cy="12.15" r="1.8"/><circle cx="22.6" cy="9.85" r="1.8"/><circle cx="22.6" cy="12.15" r="1.8"/><rect x="3.4" y="16.95" width="19.2" height="2.1" rx="1.05"/><circle cx="3.4" cy="16.85" r="1.8"/><circle cx="3.4" cy="19.15" r="1.8"/><circle cx="22.6" cy="16.85" r="1.8"/><circle cx="22.6" cy="19.15" r="1.8"/></svg><span class="mcount" id="menuCount" hidden></span>
+        <svg class="burgerbones" viewBox="0 0 885 650" fill="currentColor" aria-hidden="true"><defs><path id="obbone" fill-rule="evenodd" d="M834 2 L856 4 L874 17 L883 38 L881 57 L880 40 L879 44 L874 43 L866 24 L866 41 L878 45 L878 58 L872 66 L877 51 L870 62 L855 70 L855 63 L853 67 L846 53 L839 51 L842 56 L837 54 L845 62 L837 57 L848 67 L847 74 L840 78 L839 70 L838 83 L836 79 L830 83 L834 78 L826 79 L826 83 L815 82 L825 90 L818 86 L793 87 L830 94 L829 99 L836 100 L831 101 L836 103 L836 108 L835 104 L832 107 L835 117 L847 103 L861 101 L859 95 L849 94 L860 81 L859 94 L879 116 L883 139 L873 156 L856 164 L879 147 L881 140 L870 152 L874 138 L866 155 L870 147 L864 154 L861 149 L851 151 L850 145 L840 147 L854 141 L842 140 L842 145 L834 136 L831 140 L834 132 L838 137 L837 127 L830 126 L833 111 L829 116 L830 111 L825 114 L816 105 L814 110 L810 105 L809 110 L789 106 L799 110 L736 101 L707 102 L797 110 L803 112 L801 117 L806 117 L804 113 L815 114 L810 117 L813 126 L813 120 L818 118 L822 140 L829 141 L822 144 L827 149 L819 149 L820 153 L814 149 L820 145 L808 146 L755 120 L706 116 L760 124 L729 122 L767 128 L825 158 L832 159 L835 156 L830 154 L838 150 L842 154 L838 152 L833 162 L820 161 L824 157 L815 155 L816 159 L808 152 L811 159 L802 152 L806 152 L803 146 L751 127 L722 122 L776 137 L806 155 L812 164 L824 168 L812 165 L790 147 L756 134 L661 119 L551 114 L321 114 L185 120 L178 117 L260 112 L115 122 L146 116 L308 107 L495 106 L361 103 L140 114 L100 121 L82 131 L91 122 L129 112 L198 104 L325 98 L221 98 L299 92 L316 95 L314 92 L321 93 L320 90 L186 99 L181 103 L212 99 L218 99 L214 102 L130 110 L93 119 L85 125 L79 124 L90 118 L123 111 L100 113 L77 124 L68 146 L64 144 L70 130 L66 140 L62 141 L65 137 L61 133 L62 144 L58 147 L62 148 L54 152 L49 152 L58 147 L45 146 L43 150 L37 145 L44 151 L40 153 L47 154 L31 148 L30 144 L34 144 L28 138 L24 141 L32 131 L19 139 L15 136 L19 146 L42 157 L17 149 L2 126 L4 104 L23 77 L18 71 L25 71 L27 80 L14 96 L9 115 L29 84 L40 74 L49 74 L39 73 L34 78 L42 71 L37 72 L36 66 L41 65 L38 61 L45 66 L46 60 L39 57 L37 64 L39 56 L33 58 L48 57 L46 45 L42 51 L39 41 L32 44 L37 44 L36 48 L27 43 L33 49 L32 54 L26 50 L28 54 L20 50 L22 45 L16 46 L20 43 L12 44 L15 40 L10 44 L10 34 L6 38 L12 24 L32 10 L29 7 L48 7 L66 14 L70 22 L65 22 L63 29 L73 34 L71 37 L78 43 L81 38 L120 53 L138 54 L91 42 L87 40 L92 39 L87 36 L89 30 L179 52 L342 64 L675 60 L761 48 L789 39 L801 30 L792 44 L765 56 L670 70 L761 59 L783 52 L803 39 L805 45 L799 51 L809 53 L809 57 L812 52 L817 54 L815 51 L836 55 L816 46 L839 47 L822 44 L812 34 L813 25 L821 26 L821 20 L826 20 L822 17 L827 15 L820 15 L836 7 L864 15 L877 40 L870 19 L844 6 L816 13 L807 32 L809 16 Z"/></defs><use href="#obbone" y="0"/><use href="#obbone" y="240"/><use href="#obbone" y="480"/></svg><span class="mcount" id="menuCount" hidden></span>
       </button>
     </div>
     <div class="mviews" id="mviews"></div>

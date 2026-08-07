@@ -241,10 +241,10 @@ To swap in an LLM instead, replace `summarize()` in `app.py`; it takes
   two pill rows for no reason but desktop space. The first paper starts about
   60px down instead of 250.
 
-  The ☰ is three little bones — the same shaft-and-condyles construction as the
-  letters in the monogram, laid on its side. At 21px the knuckles are barely a
-  pixel each, which is the intent: it reads as a menu first, and rewards a
-  second look.
+  The ☰ is three little bones, traced from the same artwork as the monogram and
+  stacked with a `<use>` so the path is stored once. At 22px the knuckles are
+  barely a pixel each, which is the intent: it reads as a menu first, and
+  rewards a second look.
 
   Two decisions worth keeping. The ☰ carries a **badge counting the narrowings
   in force**, because hiding controls is only honest if the reader can see that
