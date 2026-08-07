@@ -301,6 +301,12 @@ To swap in an LLM instead, replace `summarize()` in `app.py`; it takes
 - **Fields** — pick the subspecialties you follow; counts show what's in the
   current window. Saved per device.
 - **Journal dropdown** — counts per journal for the current window.
+- **More** — appearance, Refresh, Edit your interests and Subscribe. These used
+  to sit in the footer, which meant scrolling past a hundred papers to change
+  the theme. The header is sticky, so they hang off it now: a popover beside
+  Filters on a desktop, the last group in the sheet on a phone. The subscribe
+  panel moved with them, or tapping Subscribe would have sent you to the footer
+  you were trying to avoid.
 - **Refresh** — bypasses the 30-minute cache and re-queries both APIs.
 - **Appearance** (footer) — Auto follows your system setting; Light and Dark
   override it. Saved per device, and applied before first paint so an explicit

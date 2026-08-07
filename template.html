@@ -453,6 +453,44 @@
 
   .no-abs{color:var(--ink-3);font-size:13px;font-style:italic;margin:10px 0 0}
 
+  /* ---------- the More menu ---------- */
+  /* order:4 puts it after Filters; the toolbar's other children carry 0-3, so
+     without one it lands at the front, before the search box. */
+  .morebtn{position:relative; order:4}
+  /* Right-anchored, inherited from .picker: with order:4 this button is the
+     last thing in the toolbar, so the panel has to open leftwards. */
+  .morepop{width:min(340px,calc(100vw - 40px))}
+  /* In the footer these sat in a row. In a menu they are a list, and the
+     appearance switch keeps its own row because it is three buttons. */
+  .morepop .fcontrols, .msheet .fcontrols{
+    display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin:0;
+  }
+  .morepop .fcontrols .linkbtn, .msheet .fcontrols .linkbtn{
+    text-decoration:none;color:var(--ink);font-size:14px;padding:9px 2px;width:100%;
+    text-align:left;border-radius:8px;
+  }
+  .morepop .fcontrols .linkbtn:hover{color:var(--accent)}
+  .morepop .theme, .msheet .theme{
+    display:flex;align-items:center;gap:6px;padding:4px 0 10px;margin-bottom:4px;
+    border-bottom:1px solid var(--line);width:100%;
+  }
+  .morepop .theme .lbl, .msheet .theme .lbl{font-size:12px;color:var(--ink-3);margin-right:auto}
+  .morepop .subscribe, .msheet .subscribe{
+    margin:10px 0 0;padding:12px 0 0;border:0;border-top:1px solid var(--line);
+    border-radius:0;background:none;max-width:none;
+  }
+  .msheet .fcontrols .linkbtn{font-size:15px;padding:11px 2px}
+  /* The panel was built for a 620px-wide footer card. In a menu it is a column.
+     It also now sits inside .picker, whose label rule centres a checkbox next
+     to its text — which is not what a field label above a select wants. */
+  .morepop .sub-picks, .msheet .sub-picks{flex-direction:column;align-items:stretch;gap:9px}
+  .morepop .sub-picks label, .msheet .sub-picks label{
+    width:100%;align-items:stretch;padding:0;display:flex;flex-direction:column;gap:4px;
+  }
+  .morepop .sub-picks select, .msheet .sub-picks select{width:100%}
+  .morepop .sub-why, .msheet .sub-why{font-size:12px}
+  .morepop .sub-head h4, .msheet .sub-head h4{font-size:13px}
+
   /* ---------- subscribe ---------- */
   .subscribe{
     margin:14px 0 4px;padding:16px 18px;background:var(--panel);
@@ -714,6 +752,11 @@
                 title="Choose subspecialties and study designs">Filters<span class="count" id="fieldsCount"></span></button>
         <div class="picker" id="fieldsPicker" hidden></div>
       </span>
+      <span class="morebtn">
+        <button class="ghost" id="moreBtn" aria-expanded="false" aria-controls="morePop"
+                title="Appearance, interests, refresh, subscribe">More</button>
+        <div class="picker morepop" id="morePop" hidden></div>
+      </span>
     </div>
   </div>
 </header>
@@ -738,6 +781,7 @@
     <div class="mshead"><button class="mdone" id="sheetDone">Done</button></div>
     <div class="mgroup" id="slotWindow"><h5>How far back</h5></div>
     <div class="mgroup" id="slotPicker"></div>
+    <div class="mgroup" id="slotMore"></div>
   </div>
 
   <footer>
@@ -2233,7 +2277,15 @@ function applyLayout(){
   const views = document.getElementById("viewPills");
   const windows = document.getElementById("windowPills");
   const pick = document.getElementById("fieldsPicker");
-  [logo, search, views, windows, pick].forEach(rememberHome);
+  /* The appearance switch, Refresh, Edit your interests and Subscribe used to
+     live in the footer, which meant scrolling past a hundred papers to reach
+     them. The header is sticky, so they now hang off it: in the sheet on a
+     phone, in a popover beside Filters on a desktop. The subscribe panel goes
+     with them, or tapping Subscribe would send the reader to the footer they
+     were trying to avoid. */
+  const controls = document.querySelector(".fcontrols");
+  const subscribe = document.getElementById("subscribe");
+  [logo, search, views, windows, pick, controls, subscribe].forEach(rememberHome);
 
   if(onPhone()){
     bar.insertBefore(logo, menuBtn);
@@ -2242,9 +2294,15 @@ function applyLayout(){
     document.getElementById("slotWindow").appendChild(windows);
     document.getElementById("slotPicker").appendChild(pick);
     pick.hidden = false;                 // in the sheet it is content, not a popover
+    const slot = document.getElementById("slotMore");
+    slot.appendChild(controls);
+    slot.appendChild(subscribe);
   }else{
     [logo, search, views, windows, pick].forEach(sendHome);
     pick.hidden = true;
+    const pop = document.getElementById("morePop");
+    pop.appendChild(controls);
+    pop.appendChild(subscribe);
     openSheet(false);
   }
   updateMenuBadge();
@@ -2302,6 +2360,18 @@ function openPicker(open){
   fieldsBtn.setAttribute("aria-expanded", String(open));
 }
 fieldsBtn.addEventListener("click", e => { e.stopPropagation(); openPicker(picker.hidden); });
+
+/* ---------- the More popover ---------- */
+const morePop = document.getElementById("morePop");
+const moreBtn = document.getElementById("moreBtn");
+function openMore(open){
+  if(onPhone()) return;               // on a phone these live in the sheet
+  morePop.hidden = !open;
+  moreBtn.setAttribute("aria-expanded", String(open));
+}
+moreBtn.addEventListener("click", e => { e.stopPropagation(); openMore(morePop.hidden); });
+morePop.addEventListener("click", e => e.stopPropagation());
+document.addEventListener("click", () => openMore(false));
 picker.addEventListener("click", e => e.stopPropagation());
 document.addEventListener("click", () => openPicker(false));
 picker.addEventListener("change", e => {
