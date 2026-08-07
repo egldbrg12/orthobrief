@@ -1840,7 +1840,7 @@ function obRender(){
         Try the full name (<b>Young-Min Kwon</b>) or surname plus initials (<b>Kwon YM</b>).</p>` : ""}`;
   }else if(step === "role"){
     body.innerHTML = `
-      <h2 id="obTitle">What brings you to the literature?</h2>
+      <h2 id="obTitle">What brings you to OrthoBrief?</h2>
       <p class="sub">This only sets sensible defaults — you can change everything later.</p>
       <div class="ob-opts">${ROLES.map(r => `
         <button class="ob-opt" data-role="${esc(r.key)}" aria-pressed="${obDraft.role === r.key}">
