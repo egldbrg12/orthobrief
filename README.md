@@ -250,8 +250,12 @@ To swap in an LLM instead, replace `summarize()` in `app.py`; it takes
   in force**, because hiding controls is only honest if the reader can see that
   something is hidden. And *which papers* — All/Unread/Saved — stays on screen
   rather than going in the sheet: Unread is the reason to come back, and a mode
-  nobody can see is a mode nobody uses. The sheet closes on Done, on the scrim,
-  on Escape and on a downward swipe.
+  nobody can see is a mode nobody uses. The sheet slides up rather than
+  appearing: `hidden` is `display:none` and display can't be transitioned, so
+  open state is a class driving a transform, with visibility delayed by the
+  animation on the way out so a shut sheet stays out of the tab order. It closes
+  on Done, on the scrim, on Escape and on a downward swipe, and honours
+  `prefers-reduced-motion`.
 
   The controls are **moved, not duplicated**: one set of nodes, one set of
   handlers, relocated by a `matchMedia` listener and moved back above the
