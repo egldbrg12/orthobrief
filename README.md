@@ -311,6 +311,25 @@ fields and designs you're looking at is working state, not a preference. The
 counts next to them (`Arthroplasty 30`) describe the *current window*, which is
 context a separate page would lose.
 
+## Adding it to a home screen
+
+`apple-touch-icon.png` (180px), `icon-192.png`, `icon-512.png` and a
+`manifest.webmanifest` are written next to the page on every build, so adding
+OrthoBrief to a phone's home screen gives the bone monogram rather than a
+screenshot of the page.
+
+They are drawn, not exported. iOS ignores an SVG for `apple-touch-icon` and
+won't take a data URI, so a real PNG at a real URL is required — and rather than
+add a dependency to make one, note that the monogram is polygons: the tracer
+that produced it emits only moves and lines. A supersampled scanline fill and a
+zlib stream are the entire renderer, about eighty lines, and it takes 0.1s for
+the 180px icon. The geometry is read out of `template.html` at build time, so
+the icon cannot drift from the mark in the header.
+
+No rounded corners on purpose: iOS masks the icon to its own shape, and rounding
+it here would show as a dark ring inside that mask. The workflow refuses to
+publish if any icon is missing, isn't a PNG, or is the wrong size.
+
 ## Standing queries (RSS)
 
 The one thing this classifier can do that a PubMed alert cannot: say *an RCT

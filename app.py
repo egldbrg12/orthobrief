@@ -28,6 +28,7 @@ import os
 import re
 import socket
 import ssl
+import struct
 import subprocess
 import sys
 import threading
@@ -36,6 +37,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+import zlib
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from email.utils import format_datetime
@@ -1540,6 +1542,140 @@ def _strip_abstracts(feed: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Home-screen icons
+# ---------------------------------------------------------------------------
+# iOS ignores SVG for apple-touch-icon and won't take a data URI, so adding
+# OrthoBrief to a home screen needs a real PNG at a real URL. Rather than add a
+# dependency to draw one, note that the monogram is polygons — the tracer that
+# made it emits only moves and lines — so a scanline fill and a zlib stream are
+# the whole renderer. Read from the template, so the icon can never drift from
+# the mark in the header.
+
+ICON_BG = (0x2F, 0x5D, 0x8A)      # --accent, light theme
+ICON_INK = (0xFF, 0xFF, 0xFF)
+
+
+def _mark_polygons() -> tuple[list[list[tuple[float, float]]], float, float]:
+    with open(os.path.join(HERE, "template.html"), encoding="utf-8") as fh:
+        html = fh.read()
+    svg = re.search(r'<svg class="markart".*?</svg>', html, re.S)
+    if not svg:
+        raise RuntimeError("no monogram in template.html")
+    box = re.search(r'viewBox="0 0 ([\d.]+) ([\d.]+)"', svg.group(0))
+    d = re.search(r'\sd="([^"]+)"', svg.group(0)).group(1)
+    subpaths = []
+    for chunk in d.split("M")[1:]:
+        pts = [tuple(map(float, p.split()))
+               for p in re.findall(r"([-\d.]+ [-\d.]+)", chunk.replace("Z", ""))]
+        if len(pts) > 2:
+            subpaths.append(pts)
+    return subpaths, float(box.group(1)), float(box.group(2))
+
+
+def _coverage(subpaths, vw, vh, size, pad, ss=4):
+    """Even-odd scanline fill, supersampled, returning 0..1 per pixel.
+
+    Supersampling rather than analytic coverage because it is twenty lines
+    instead of two hundred, and an icon is rendered twice a day by a robot.
+    """
+    inner = size - pad * 2
+    scale = min(inner / vw, inner / vh)
+    ox = (size - vw * scale) / 2
+    oy = (size - vh * scale) / 2
+    edges = []
+    for pts in subpaths:
+        for i, (x0, y0) in enumerate(pts):
+            x1, y1 = pts[(i + 1) % len(pts)]
+            ax, ay = x0 * scale + ox, y0 * scale + oy
+            bx, by = x1 * scale + ox, y1 * scale + oy
+            if ay != by:
+                edges.append((ax, ay, bx, by))
+
+    cov = [0] * (size * size)
+    for sy in range(size * ss):
+        y = (sy + 0.5) / ss
+        xs = []
+        for ax, ay, bx, by in edges:
+            if (ay <= y < by) or (by <= y < ay):
+                xs.append(ax + (y - ay) / (by - ay) * (bx - ax))
+        if not xs:
+            continue
+        xs.sort()
+        row = (sy // ss) * size
+        for i in range(0, len(xs) - 1, 2):
+            first = max(0, int(xs[i] * ss + 0.5))
+            last = min(size * ss, int(xs[i + 1] * ss + 0.5))
+            for sx in range(first, last):
+                cov[row + sx // ss] += 1
+    n = float(ss * ss)
+    return [c / n for c in cov]
+
+
+def _png(size: int, pixels: bytes) -> bytes:
+    """Minimal RGB PNG. `pixels` is size*size*3 bytes, no filtering."""
+    raw = bytearray()
+    stride = size * 3
+    for y in range(size):
+        raw.append(0)
+        raw += pixels[y * stride:(y + 1) * stride]
+
+    def chunk(kind: bytes, body: bytes) -> bytes:
+        return (struct.pack(">I", len(body)) + kind + body
+                + struct.pack(">I", zlib.crc32(kind + body) & 0xFFFFFFFF))
+
+    return (b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(bytes(raw), 9))
+            + chunk(b"IEND", b""))
+
+
+def render_icon(size: int) -> bytes:
+    """The monogram in white on the accent colour, full bleed.
+
+    No rounded corners: iOS masks the icon to its own shape, and rounding it
+    here would show as a dark ring inside that mask.
+    """
+    subpaths, vw, vh = _mark_polygons()
+    cov = _coverage(subpaths, vw, vh, size, pad=max(2, round(size * 0.14)))
+    out = bytearray(size * size * 3)
+    for i, a in enumerate(cov):
+        for c in range(3):
+            out[i * 3 + c] = round(ICON_BG[c] + (ICON_INK[c] - ICON_BG[c]) * a)
+    return _png(size, bytes(out))
+
+
+ICON_SIZES = {"apple-touch-icon.png": 180, "icon-192.png": 192, "icon-512.png": 512}
+
+MANIFEST = json.dumps({
+    "name": "OrthoBrief",
+    "short_name": "OrthoBrief",
+    "description": "Your daily orthopaedic updates",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#faf9f7",
+    "theme_color": "#2f5d8a",
+    "icons": [
+        {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
+        {"src": "icon-512.png", "sizes": "512x512", "type": "image/png",
+         "purpose": "any maskable"},
+    ],
+}, indent=2)
+
+
+def write_icons(dirpath: str) -> list[str]:
+    os.makedirs(dirpath, exist_ok=True)
+    written = []
+    for name, size in ICON_SIZES.items():
+        with open(os.path.join(dirpath, name), "wb") as fh:
+            fh.write(render_icon(size))
+        written.append(name)
+    with open(os.path.join(dirpath, "manifest.webmanifest"), "w", encoding="utf-8") as fh:
+        fh.write(MANIFEST)
+    written.append("manifest.webmanifest")
+    return written
+
+
+# ---------------------------------------------------------------------------
 # Standing queries, as RSS
 # ---------------------------------------------------------------------------
 # The one thing this classifier can do that a PubMed alert cannot: say "an RCT
@@ -1853,6 +1989,11 @@ def write_snapshot(path: str, force: bool = False, public: bool = False,
     with open(path, "wb") as fh:
         fh.write(render_page(feeds["1"], feeds))
 
+    # Home-screen icons go beside the page, because iOS wants a real file at a
+    # real URL and will not take the SVG the favicon uses.
+    written = write_icons(os.path.dirname(os.path.abspath(path)) or ".")
+    print(f"  {len(written)} icons + manifest", file=sys.stderr)
+
     # The standing-query feeds ride along on the widest window already in hand,
     # so publishing them costs no extra calls to anybody's API.
     if rss_dir:
@@ -1902,6 +2043,10 @@ class Handler(BaseHTTPRequestHandler):
                 feed = select_fields(build_feed(days, force), selected)
                 self._send(json.dumps(feed, ensure_ascii=False).encode("utf-8"),
                            "application/json; charset=utf-8")
+            elif parsed.path.lstrip("/") in ICON_SIZES:
+                self._send(render_icon(ICON_SIZES[parsed.path.lstrip("/")]), "image/png")
+            elif parsed.path == "/manifest.webmanifest":
+                self._send(MANIFEST.encode(), "application/manifest+json")
             elif parsed.path == "/feeds/feed.xsl":
                 self._send(FEED_XSL.replace("__NS__", BASE_URL + "/ns").encode(),
                            "text/xsl; charset=utf-8")

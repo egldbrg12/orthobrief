@@ -56,6 +56,26 @@ jobs:
               sys.exit("template tokens were not filled in")
           PY
 
+      - name: Check the home-screen icons
+        run: |
+          python3 - <<'PY'
+          import os, struct, sys
+          need = {"apple-touch-icon.png": 180, "icon-192.png": 192, "icon-512.png": 512}
+          for name, size in need.items():
+              path = f"public/{name}"
+              if not os.path.exists(path):
+                  sys.exit(f"{name} was not built")
+              head = open(path, "rb").read(24)
+              if head[:8] != b"\x89PNG\r\n\x1a\n":
+                  sys.exit(f"{name} is not a PNG")
+              w, h = struct.unpack(">II", head[16:24])
+              if (w, h) != (size, size):
+                  sys.exit(f"{name} is {w}x{h}, expected {size}x{size}")
+              print(f"{name}: {w}x{h}, {os.path.getsize(path)} bytes")
+          if not os.path.exists("public/manifest.webmanifest"):
+              sys.exit("no manifest")
+          PY
+
       - name: Check the standing-query feeds
         run: |
           python3 - <<'PY'
