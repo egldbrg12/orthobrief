@@ -510,9 +510,13 @@
     .mburger{
       flex:0 0 auto; width:38px; height:34px; border-radius:9px; cursor:pointer;
       background:var(--panel); border:1px solid var(--line); padding:0;
-      display:grid; place-content:center; gap:4px; position:relative;
+      display:grid; place-content:center; position:relative;
     }
-    .mburger i{ display:block; width:16px; height:2px; border-radius:2px; background:var(--ink-2) }
+    /* Three bones rather than three bars — the same shaft-and-condyles
+       construction as the letters in the monogram, laid on its side. At this
+       size the knuckles are barely a pixel each, which is the point: it should
+       read as a menu first and reward a second look. */
+    .mburger .burgerbones{ display:block; width:21px; height:auto; color:var(--ink-2) }
     /* Hiding controls is only honest if the reader can see that something is
        hidden. The badge counts the narrowings currently in force. */
     .mcount{
@@ -653,7 +657,7 @@
     <div class="mbar" id="mbar">
       <button class="mburger" id="menuBtn" aria-expanded="false"
               aria-controls="sheet" aria-label="Views and filters">
-        <i></i><i></i><i></i><span class="mcount" id="menuCount" hidden></span>
+        <svg class="burgerbones" viewBox="0 0 26 22" fill="currentColor" aria-hidden="true"><rect x="3.4" y="2.95" width="19.2" height="2.1" rx="1.05"/><circle cx="3.4" cy="2.85" r="1.8"/><circle cx="3.4" cy="5.15" r="1.8"/><circle cx="22.6" cy="2.85" r="1.8"/><circle cx="22.6" cy="5.15" r="1.8"/><rect x="3.4" y="9.95" width="19.2" height="2.1" rx="1.05"/><circle cx="3.4" cy="9.85" r="1.8"/><circle cx="3.4" cy="12.15" r="1.8"/><circle cx="22.6" cy="9.85" r="1.8"/><circle cx="22.6" cy="12.15" r="1.8"/><rect x="3.4" y="16.95" width="19.2" height="2.1" rx="1.05"/><circle cx="3.4" cy="16.85" r="1.8"/><circle cx="3.4" cy="19.15" r="1.8"/><circle cx="22.6" cy="16.85" r="1.8"/><circle cx="22.6" cy="19.15" r="1.8"/></svg><span class="mcount" id="menuCount" hidden></span>
       </button>
     </div>
     <div class="mviews" id="mviews"></div>
