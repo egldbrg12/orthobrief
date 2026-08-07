@@ -1522,6 +1522,20 @@ def _item_guid(p: dict) -> str:
     return "title:" + re.sub(r"[^a-z0-9]", "", (p.get("title") or "").lower())[:60]
 
 
+def _authors_line(p: dict) -> str:
+    """Name two, count the rest — the same line the card shows.
+
+    `authors_short` elides twice ("A, B, … Z (+7 more)"), which the page stopped
+    doing; a feed item should not go back to saying it both ways.
+    """
+    a = p.get("authors") or []
+    if not a:
+        return p.get("authors_short") or ""
+    if len(a) <= 3:
+        return ", ".join(a)
+    return f"{a[0]}, {a[1]} and {len(a) - 2} others"
+
+
 def _cdata(s: str) -> str:
     return "<![CDATA[" + str(s or "").replace("]]>", "]]&gt;") + "]]>"
 
@@ -1532,9 +1546,17 @@ def render_rss(papers: list[dict], *, title: str, description: str, path: str) -
     self_url = f"{BASE_URL}/feeds/{path}"
     now = format_datetime(datetime.now(timezone.utc))
 
+    # Opened in a browser, a bare feed is a wall of angle brackets that reads as
+    # broken to anyone who isn't already an RSS user. A stylesheet makes the
+    # same file a readable page; feed readers ignore it entirely. Relative, so
+    # it resolves on localhost and on the published site alike.
+    up = "../" * path.count("/")
+
     out = ['<?xml version="1.0" encoding="UTF-8"?>',
+           f'<?xml-stylesheet type="text/xsl" href="{up}feed.xsl"?>',
            '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"'
-           ' xmlns:dc="http://purl.org/dc/elements/1.1/">', "<channel>",
+           ' xmlns:dc="http://purl.org/dc/elements/1.1/"'
+           f' xmlns:ob="{BASE_URL}/ns">', "<channel>",
            f"<title>{esc(title)}</title>",
            f"<link>{esc(BASE_URL)}/</link>",
            f"<description>{esc(description)}</description>",
@@ -1550,15 +1572,23 @@ def render_rss(papers: list[dict], *, title: str, description: str, path: str) -
         body = "<p>" + esc(" · ".join(bits)) + "</p>"
         if p.get("summary"):
             body += "<p>" + esc(p["summary"]) + "</p>"
-        if p.get("authors_short"):
-            body += "<p><em>" + esc(p["authors_short"]) + "</em></p>"
+        if _authors_line(p):
+            body += "<p><em>" + esc(_authors_line(p)) + "</em></p>"
 
         out += ["<item>",
                 f"<title>{esc(p.get('title'))}</title>",
                 f"<link>{esc(_item_link(p))}</link>",
                 f'<guid isPermaLink="false">{esc(_item_guid(p))}</guid>',
                 f"<pubDate>{_rfc822(p.get('date') or '')}</pubDate>",
-                f"<description>{_cdata(body)}</description>"]
+                f"<description>{_cdata(body)}</description>",
+                # The same content as plain text, for the browser stylesheet:
+                # rendering the HTML in `description` would need
+                # disable-output-escaping, which Firefox has never supported.
+                f"<ob:journal>{esc(p.get('journal'))}</ob:journal>",
+                f"<ob:design>{esc(st.get('label'))}</ob:design>",
+                f"<ob:fields>{esc(fields)}</ob:fields>",
+                f"<ob:summary>{esc(p.get('summary'))}</ob:summary>",
+                f"<ob:authors>{esc(_authors_line(p))}</ob:authors>"]
         for a in (p.get("authors") or [])[:8]:
             out.append(f"<dc:creator>{esc(a)}</dc:creator>")
         if st.get("label"):
@@ -1569,6 +1599,110 @@ def render_rss(papers: list[dict], *, title: str, description: str, path: str) -
 
     out += ["</channel>", "</rss>", ""]
     return "\n".join(out).encode("utf-8")
+
+
+# What a browser shows when someone opens a feed URL instead of subscribing to
+# it. Readers never see this — they ignore the stylesheet instruction — so it
+# exists purely so the link is worth clicking: what the query is, how to
+# subscribe, and the papers it currently holds.
+FEED_XSL = """<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet version="1.0"
+  xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+  xmlns:atom="http://www.w3.org/2005/Atom"
+  xmlns:ob="__NS__">
+<xsl:output method="html" encoding="UTF-8" indent="yes"
+  doctype-system="about:legacy-compat"/>
+<xsl:template match="/rss/channel">
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title><xsl:value-of select="title"/></title>
+<style>
+  :root{
+    --bg:#faf9f7; --panel:#fff; --panel-2:#f2f0ec; --line:#e5e1da;
+    --ink:#1a1815; --ink-2:#4a453e; --ink-3:#8a8379; --accent:#2f5d8a;
+    --serif:ui-serif,"Iowan Old Style","Source Serif Pro",Georgia,serif;
+    --sans:ui-sans-serif,-apple-system,"Segoe UI",Inter,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#16150f;--panel:#1e1d16;--panel-2:#23221a;--line:#302e25;
+          --ink:#f2efe6;--ink-2:#c9c4b6;--ink-3:#8d887c;--accent:#7aa9d6}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+       font-size:15px;line-height:1.55}
+  .wrap{max-width:760px;margin:0 auto;padding:0 20px 70px}
+  header{border-bottom:1px solid var(--line);padding:30px 0 20px;margin-bottom:6px}
+  .kicker{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+  h1{font-family:var(--serif);font-size:29px;line-height:1.2;margin:8px 0 6px;font-weight:600}
+  .desc{color:var(--ink-2);font-size:14px;margin:0}
+  .how{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+       padding:15px 17px;margin:20px 0 8px}
+  .how b{font-size:13.5px}
+  .how p{margin:6px 0 0;color:var(--ink-3);font-size:13px}
+  .how code{display:block;margin-top:9px;padding:9px 11px;background:var(--panel-2);
+            border-radius:8px;font-size:12px;overflow-x:auto;white-space:nowrap;color:var(--ink-2)}
+  .paper{border-bottom:1px solid var(--line);padding:20px 0}
+  .paper h2{font-family:var(--serif);font-size:19px;line-height:1.3;margin:0 0 5px;font-weight:600}
+  .paper h2 a{color:inherit;text-decoration:none}
+  .paper h2 a:hover{text-decoration:underline;text-decoration-color:var(--accent)}
+  .byline{color:var(--ink-3);font-size:12.5px;margin:0 0 6px}
+  .sum{color:var(--ink-2);font-size:14px;margin:0;border-left:2px solid var(--accent);padding-left:13px}
+  .empty{padding:40px 0;color:var(--ink-3)}
+  footer{margin-top:28px;color:var(--ink-3);font-size:12.5px}
+  a{color:var(--accent)}
+</style>
+</head>
+<body><div class="wrap">
+<header>
+  <div class="kicker">OrthoBrief &#183; standing query</div>
+  <h1><xsl:value-of select="title"/></h1>
+  <p class="desc"><xsl:value-of select="description"/></p>
+</header>
+
+<div class="how">
+  <b>This page is a feed.</b>
+  <p>Copy the address below into any RSS reader and new papers matching this
+     query arrive on their own &#8212; no account, nothing to confirm. Study
+     designs are tagged from the abstract the day the DOI appears, weeks before
+     PubMed assigns a publication type.</p>
+  <p>No reader yet? Feedly, Inoreader and NetNewsWire are all free and take the
+     address as-is.</p>
+  <code><xsl:value-of select="atom:link/@href"/></code>
+</div>
+
+<xsl:if test="not(item)">
+  <p class="empty">Nothing matches this query in the current window. That is what
+     a standing query is for &#8212; subscribe, and the first match will come to you.</p>
+</xsl:if>
+
+<xsl:for-each select="item">
+  <div class="paper">
+    <h2><a href="{link}"><xsl:value-of select="title"/></a></h2>
+    <p class="byline">
+      <xsl:value-of select="ob:journal"/>
+      <xsl:if test="ob:design != ''"> &#183; <xsl:value-of select="ob:design"/></xsl:if>
+      <xsl:if test="ob:fields != ''"> &#183; <xsl:value-of select="ob:fields"/></xsl:if>
+    </p>
+    <xsl:if test="ob:authors != ''">
+      <p class="byline"><xsl:value-of select="ob:authors"/></p>
+    </xsl:if>
+    <xsl:if test="ob:summary != ''">
+      <p class="sum"><xsl:value-of select="ob:summary"/></p>
+    </xsl:if>
+  </div>
+</xsl:for-each>
+
+<footer>
+  <p>Rebuilt daily from Crossref and PubMed.
+     <a href="{link}">Open OrthoBrief</a> to browse everything, or to build a
+     different standing query.</p>
+</footer>
+</div></body></html>
+</xsl:template>
+</xsl:stylesheet>
+"""
 
 
 def write_feeds(dirpath: str, feed: dict) -> list[str]:
@@ -1594,6 +1728,11 @@ def write_feeds(dirpath: str, feed: dict) -> list[str]:
 
     def of_design(pool: list[dict], keys: tuple[str, ...]) -> list[dict]:
         return [p for p in pool if (p.get("study") or {}).get("key") in keys]
+
+    os.makedirs(dirpath, exist_ok=True)
+    with open(os.path.join(dirpath, "feed.xsl"), "w", encoding="utf-8") as fh:
+        fh.write(FEED_XSL.replace("__NS__", BASE_URL + "/ns"))
+    written.append("feed.xsl")
 
     since = f"Papers from the last {FEED_WINDOW_DAYS} days, rebuilt daily."
     emit("all.xml", papers, "OrthoBrief", f"Today's orthopaedic literature. {since}")
@@ -1697,11 +1836,18 @@ class Handler(BaseHTTPRequestHandler):
                 feed = select_fields(build_feed(days, force), selected)
                 self._send(json.dumps(feed, ensure_ascii=False).encode("utf-8"),
                            "application/json; charset=utf-8")
+            elif parsed.path == "/feeds/feed.xsl":
+                self._send(FEED_XSL.replace("__NS__", BASE_URL + "/ns").encode(),
+                           "text/xsl; charset=utf-8")
             elif parsed.path.startswith("/feeds/") and parsed.path.endswith(".xml"):
                 # Served from memory rather than from disk, so a standing query
                 # can be tested here exactly as it will be published.
+                # `application/xml`, not `application/rss+xml`, to match what
+                # GitHub Pages serves for a .xml file — and because Chrome
+                # renders the rss+xml type as plain text instead of applying
+                # the stylesheet, which would make this untestable locally.
                 self._send(_serve_feed(parsed.path[len("/feeds/"):], force),
-                           "application/rss+xml; charset=utf-8")
+                           "application/xml; charset=utf-8")
             elif parsed.path == "/healthz":
                 self._send(b"ok", "text/plain")
             else:

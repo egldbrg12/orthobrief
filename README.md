@@ -252,6 +252,15 @@ from the 14-day window it has already fetched, so they cost no extra calls to
 Crossref or NCBI. **Subscribe to this search** in the footer composes the URL
 for you and opens pre-filled with whatever you're currently looking at.
 
+**Opened in a browser, a feed is a readable page**, not a wall of angle
+brackets. `feeds/feed.xsl` is an XSLT stylesheet the browser applies and every
+feed reader ignores, so the same URL is both a subscribable feed and a page
+worth sending someone: what the query is, the address to paste into a reader,
+and the papers it currently holds. Items therefore carry their journal, design,
+summary and authors twice — once as HTML in `description` for readers, once as
+plain `ob:` elements for the stylesheet, because rendering the former would
+need `disable-output-escaping`, which Firefox has never supported.
+
 Most of them are empty most days, and that is the point of a standing query:
 nothing arrives until the thing you asked about appears. Items carry the title,
 journal, design tag, fields, authors and the extractive summary, and link to the
