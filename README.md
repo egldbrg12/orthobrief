@@ -220,6 +220,13 @@ To swap in an LLM instead, replace `summarize()` in `app.py`; it takes
 
 ## Using it
 
+- **The header is the monogram and the promise, nothing else.** The wordmark is
+  gone: an OB built from long bones, then *Your daily orthopaedic updates*. The
+  mark stands without a tile, because it carries four bones and eight condyles
+  per letter and a tile spends a third of the available size on padding before
+  the drawing starts — inside one at 26px the B's outer bones fell below a pixel
+  and read as clipped. The name still appears in the page title, the share card
+  and every feed.
 - **The title leads the card.** Only the study-design tag sits above it — that's
   the one thing on the card a reader can't get from PubMed. Journal,
   subspecialty and date follow the authors in a single grey line, because above
