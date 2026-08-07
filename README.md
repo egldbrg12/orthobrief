@@ -102,9 +102,17 @@ amounts of your attention. The chip row under the toolbar filters by design and
 doubles as a read of the window's shape: *41% clinical cohort, 12% systematic
 review, 3% RCT* is the field in one line.
 
-Thirteen classes: RCT, systematic review / meta-analysis, registry, clinical
-cohort, case report, biomechanics, basic science, ML / prediction, technique,
-survey / consensus, bibliometric, review / editorial, unclassified.
+Twelve classes: RCT, systematic review / meta-analysis, clinical cohort, case
+report, biomechanics, basic science, ML / prediction, technique, survey /
+consensus, bibliometric, review / editorial, unclassified.
+
+Registry studies used to be their own class and are now part of **clinical
+cohort**: a national joint registry paper is an observational cohort whose data
+came from a registry rather than a chart pull, and splitting them mostly split
+the evidence — a paper carrying both kinds of cue scored half in each and
+cleared the confidence bar in neither. Merging them moved 13 registry papers
+into cohort and, more usefully, gave 25 previously untagged papers a confident
+one.
 
 Rule-based, like the summaries — deterministic, offline, $0, and auditable.
 Two evidence streams:

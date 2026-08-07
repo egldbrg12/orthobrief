@@ -594,7 +594,6 @@ def summarize(abstract: str, title: str = "") -> str:
 STUDY_TYPES = [
     {"key": "rct",       "label": "RCT",              "long": "Randomized controlled trial"},
     {"key": "sysrev",    "label": "Systematic review", "long": "Systematic review / meta-analysis"},
-    {"key": "registry",  "label": "Registry",         "long": "Registry or administrative-database study"},
     {"key": "cohort",    "label": "Clinical cohort",  "long": "Observational clinical study"},
     {"key": "case",      "label": "Case report",      "long": "Case report or small case series"},
     {"key": "biomech",   "label": "Biomechanics",     "long": "Cadaveric, finite-element or implant-testing study"},
@@ -653,9 +652,9 @@ _CUES = [
     ("rct", 6, r"randomi[sz]ed[ -](?:\w+[- ]){0,3}(trial|study)|\brct\b", True),
     ("rct", 4, r"randomly (assigned|allocated)|double[- ]blind|placebo[- ]controlled|allocation concealment|1:1 randomi|intention[- ]to[- ]treat", False),
 
-    ("registry", 6, r"(national|regional|institutional) (joint |arthroplasty |)registr|joint replacement registr|\bnjr\b|aoanjrr|\bajrr\b|swedish (hip|knee|arthroplasty)|danish (hip|knee|arthroplasty)|norwegian arthroplasty|dutch arthroplasty|new zealand joint", False),
-    ("registry", 5, r"\bnsqip\b|national inpatient sample|nationwide (readmissions|inpatient)|pearldiver|marketscan|trinetx|premier healthcare database|medicare (claims|beneficiar)|administrative claims|claims database|national surgical quality", False),
-    ("registry", 3, r"\bregistry\b|national database|large (administrative |)database|database study", True),
+    ("cohort", 6, r"(national|regional|institutional) (joint |arthroplasty |)registr|joint replacement registr|\bnjr\b|aoanjrr|\bajrr\b|swedish (hip|knee|arthroplasty)|danish (hip|knee|arthroplasty)|norwegian arthroplasty|dutch arthroplasty|new zealand joint", False),
+    ("cohort", 5, r"\bnsqip\b|national inpatient sample|nationwide (readmissions|inpatient)|pearldiver|marketscan|trinetx|premier healthcare database|medicare (claims|beneficiar)|administrative claims|claims database|national surgical quality", False),
+    ("cohort", 3, r"\bregistry\b|national database|large (administrative |)database|database study", True),
 
     ("ml", 6, r"machine learning|deep learning|artificial intelligence|neural network|random forest|gradient boost|xgboost|convolutional|large language model|\bllm\b|chatgpt|\bgpt-?[0-9]|radiomics|computer vision|natural language processing", True),
     ("ml", 4, r"predicti(ve|on) model|nomogram|risk calculator|area under the (receiver|curve)|\bauroc\b|\bc[- ]statistic", True),
