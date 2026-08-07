@@ -81,7 +81,7 @@ FIELDS = [
     {"key": "hand",     "label": "Hand & upper extremity", "blurb": "Hand, wrist, distal radius, nerve compression"},
     {"key": "shoulder", "label": "Shoulder & elbow","blurb": "Rotator cuff, instability, elbow"},
     {"key": "foot",     "label": "Foot & ankle",   "blurb": "Hindfoot, forefoot, Achilles, ankle"},
-    {"key": "peds",     "label": "Pediatrics",     "blurb": "Paediatric ortho, deformity, growth"},
+    {"key": "peds",     "label": "Paediatrics",    "blurb": "Paediatric ortho, deformity, growth"},
     {"key": "onc",      "label": "MSK oncology",   "blurb": "Bone and soft-tissue tumour, metastatic disease"},
     {"key": "general",  "label": "General ortho",  "blurb": "Education, policy, epidemiology, everything else"},
 ]

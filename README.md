@@ -45,7 +45,7 @@ its own questions, so every paper is tagged with the subspecialties it belongs
 to and you choose which ones you follow:
 
 **Arthroplasty · Sports medicine · Trauma · Spine · Hand & upper extremity ·
-Shoulder & elbow · Foot & ankle · Pediatrics · MSK oncology · General ortho**
+Shoulder & elbow · Foot & ankle · Paediatrics · MSK oncology · General ortho**
 
 The split follows fellowship lines rather than anatomy, because that's how
 journals, departments and training are organised — a revision TKA paper is
