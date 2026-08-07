@@ -921,7 +921,12 @@ function renderFieldsPicker(){
   const pool = visible(true);
   const tally = {};
   pool.forEach(p => { const k = (p.study || {}).key || "other"; tally[k] = (tally[k] || 0) + 1; });
-  const designs = (state.feed.study_types || []).filter(t => tally[t.key]);
+  /* "Unclassified" is not a design, it is us having nothing to say — and now
+     that only confident calls are shown it is the largest bucket, which would
+     make our own silence the biggest thing in the design list. Papers without a
+     tag are still in the feed; they just aren't a filter. */
+  const designs = (state.feed.study_types || [])
+    .filter(t => tally[t.key] && t.key !== "other");
 
   const narrowed = (sel.size && sel.size < FIELDS_META.length ? 1 : 0) + (state.type ? 1 : 0);
   document.getElementById("fieldsBtn").parentElement.hidden = !FIELDS_META.length;

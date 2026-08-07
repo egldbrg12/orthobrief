@@ -716,6 +716,28 @@ _CLINICAL_FALLBACK_RE = re.compile(
 # than the same phrase anywhere in the body.
 _TITLE_BOOST, _METHODS_BOOST = 1.7, 1.3
 
+# A letter, reply or editorial commentary describes someone else's study, so it
+# is full of that study's design words. Tagging it "Clinical cohort" because it
+# says "retrospective cohort study" describes the paper it is about, not the
+# paper on the reader's screen. Matched on the title, where journals say so.
+COMMENTARY_TITLE_RE = re.compile(
+    r"^\s*(letter|re|reply|response|comment|correspondence|editorial"
+    r"|invited (commentary|editorial)|commentary)\b"
+    r"|letter to the editor|editorial commentary|author'?s? repl(y|ies)"
+    r"|\bin reply\b|comment(ary)? on\b|response to\b",
+    re.IGNORECASE,
+)
+
+# A single patient, said in the title. The clinical fallback below counts
+# "patients" and outcomes and calls that a cohort — which turns a case report
+# into a cohort of one.
+CASE_TITLE_RE = re.compile(
+    r"\ba case (report|of|series)\b|:\s*a case\b|case report\b"
+    r"|\bin a (\d+[- ]year[- ]old|young|elderly|male|female)\b"
+    r"|we (report|present|describe) (a|an|the) (rare |unusual |unique |novel )?case",
+    re.IGNORECASE,
+)
+
 METHODS_KEYS = ("METHOD", "MATERIAL", "DESIGN", "PATIENTS AND")
 
 
@@ -772,17 +794,39 @@ def classify(paper: dict) -> dict:
         if hit:
             bump(hit[0], float(hit[1]), f"PubMed tag: {raw}")
 
+    zone: dict[str, str] = {}          # where each design's best cue was found
     for key, weight, rx, strict in STUDY_CUES:
         m = rx.search(title)
-        boost = _TITLE_BOOST
+        boost, where = _TITLE_BOOST, "title"
         if not m and methods:
             m = rx.search(methods)
-            boost = _METHODS_BOOST
+            boost, where = _METHODS_BOOST, "methods"
         if not m:
             m = rx.search(abstract)
-            boost = STRICT_DISCOUNT if strict else 1.0
+            boost, where = (STRICT_DISCOUNT if strict else 1.0), "body"
         if m:
+            if weight * boost > scores.get(key, 0.0):
+                zone[key] = where
             bump(key, weight * boost, f'"{m.group(0).strip().lower()}"')
+
+    # A commentary is a commentary, whatever design words it quotes.
+    if COMMENTARY_TITLE_RE.search(title):
+        return {"key": "review", "label": STUDY_LABELS["review"],
+                "confidence": "high" if scores.get("review") else "medium",
+                "why": "the title says this is a letter, reply or commentary"}
+
+    # "…in a 24-year-old footballer" is a case report even when the abstract
+    # then talks about patients and outcomes, which is all the clinical
+    # fallback needs to call something a cohort.
+    if CASE_TITLE_RE.search(title):
+        bump("case", 6 * _TITLE_BOOST, "the title reports a single case")
+        zone["case"] = "title"
+
+    # A meta-analysis of randomised trials is a systematic review. The trials
+    # are its material, and they are named in its inclusion criteria — which is
+    # where the RCT cue keeps coming from.
+    if scores.get("sysrev") and scores.get("rct") and zone.get("rct") == "body":
+        scores["rct"] = 0.0
 
     if not scores:
         # Last resort: an abstract that counts patients and reports outcomes is
@@ -897,6 +941,27 @@ def verify_dois(papers: list[dict]) -> None:
             p["url"] = f"https://pubmed.ncbi.nlm.nih.gov/{p['pmid']}/"
 
 
+# Only a design the classifier is confident in earns a place on the card. Blind
+# against NLM's indexers, a high-confidence call is right 93% of the time; a
+# medium one 57%. Showing the medium ones bought coverage by spending the
+# reader's trust, and a literature tool that is wrong about what kind of study
+# something is teaches people to stop believing the tag at all. Below the bar,
+# the honest signal is the one already used for papers with no cue: silence.
+#
+# The full call is kept as `study_raw` — `--audit` needs to see the work, and
+# tightening the bar shouldn't blind the tool used to tune it.
+SHOW_CONFIDENCE = {"high"}
+
+
+def displayed_study(call: dict) -> dict:
+    if call.get("confidence") in SHOW_CONFIDENCE:
+        return call
+    return {"key": "other", "label": STUDY_LABELS["other"],
+            "confidence": call.get("confidence", "low"),
+            "why": call.get("why", ""),
+            "withheld": call.get("key", "")}     # what it would have said
+
+
 def apply_classifier(feed: dict) -> dict:
     """(Re)tag every paper in a feed and refresh the per-type counts.
 
@@ -905,7 +970,8 @@ def apply_classifier(feed: dict) -> dict:
     """
     papers = feed.get("papers", [])
     for p in papers:
-        p["study"] = classify(p)
+        p["study_raw"] = classify(p)
+        p["study"] = displayed_study(p["study_raw"])
         p["fields"] = classify_fields(p)
     # Re-apply the relevance gate too: a tightened cue has to be able to *drop*
     # a paper from a cached window, not just retag it.
@@ -1332,7 +1398,8 @@ def build_feed(days: int = 1, force: bool = False) -> dict:
     for p in papers:
         p["summary"] = summarize(p.get("abstract", ""), p.get("title", ""))
         p["authors_short"] = _authors_short(p.get("authors") or [])
-        p["study"] = classify(p)
+        p["study_raw"] = classify(p)
+        p["study"] = displayed_study(p["study_raw"])
         # `ptypes` and `issns` stay on the record so a cached feed can be
         # re-classified after a cue edit without another round trip.
 
@@ -2038,19 +2105,20 @@ def audit_types(days: int, force: bool = False, verbose: bool = False) -> None:
 
     conf = {"high": 0, "medium": 0, "low": 0}
     for p in papers:
-        conf[p["study"]["confidence"]] += 1
+        conf[p["study_raw"]["confidence"]] += 1
     print(f"\nConfidence   high {conf['high']} · medium {conf['medium']} · low {conf['low']}")
 
     order = {"low": 0, "medium": 1, "high": 2}
-    rows = sorted(papers, key=lambda p: (order[p["study"]["confidence"]], p["study"]["key"]))
+    rows = sorted(papers, key=lambda p: (order[p["study_raw"]["confidence"]], p["study_raw"]["key"]))
     if not verbose:
-        rows = [p for p in rows if p["study"]["confidence"] != "high"]
+        rows = [p for p in rows if p["study_raw"]["confidence"] != "high"]
         print("\nEverything below high confidence (--verbose for all):\n")
     else:
         print()
     for p in rows:
-        s = p["study"]
-        print(f"  [{s['confidence']:<6}] {s['label']:<20} {p['title'][:78]}")
+        s = p["study_raw"]
+        withheld = "" if p["study"]["key"] != "other" or s["key"] == "other" else "  (withheld)"
+        print(f"  [{s['confidence']:<6}] {s['label']:<20}{withheld} {p['title'][:78]}")
         print(f"           {'+'.join(p['fields']['all']):<24} cue: {s['why'] or '—'}"
               f"{'' if p.get('abstract') else '   (no abstract)'}")
 

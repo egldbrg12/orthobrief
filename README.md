@@ -123,8 +123,39 @@ Two evidence streams:
 
 When no cue fires at all, the card shows **no design tag** rather than an
 "Unclassified?" chip — reporting our own miss on every uncertain paper is noise,
-and absence is the honest signal. (~11% of papers, two thirds of which have no
-abstract yet to read.)
+and absence is the honest signal.
+
+## How accurate is it
+
+NLM's indexers are the only ground truth available, and the classifier uses
+their tags — so to measure the cue reader on its own, the tags are suppressed
+and it is asked to reproduce the human label. That is also the day-one case the
+feeds depend on, weeks before a paper is indexed at all.
+
+On a 14-day window, 155 papers carried an unambiguous NLM design tag:
+
+| | |
+| --- | --- |
+| Assigns a design | 81% |
+| Correct when it does | **85%** |
+| High-confidence calls | **93%** correct |
+| Medium | 57% |
+| Low | 50% |
+
+**Only high-confidence calls are shown.** A medium call was right little more
+than half the time, and a literature tool that is wrong about what kind of study
+something is teaches people to stop believing the tag at all — which costs more
+than the coverage is worth. Below the bar the card shows nothing, the design
+chips don't offer it, and it never reaches a feed. That takes tagged papers from
+88% of a window to 56%; the withheld calls are mostly *Clinical cohort*. The
+full call survives as `study_raw`, and `--audit` marks the withheld ones, so the
+bar can be tuned without flying blind.
+
+Two limits worth stating. The graded set is 75 case reports and 39 editorials,
+because those are what NLM tags unambiguously — cohort studies, the bulk of the
+feed, are almost never gradeable this way, so **the accuracy of a cohort tag is
+not measured by this**. And in production any indexed paper also gets the human
+tag as evidence, so the tags on older papers are better than the blind number.
 
 Each tag carries a confidence and the exact cue that fired; hover it in the UI.
 Low-confidence tags render dashed with a trailing `?`. A clinical paper that
