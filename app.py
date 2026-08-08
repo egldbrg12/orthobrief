@@ -1695,8 +1695,19 @@ def write_icons(dirpath: str) -> list[str]:
 # a feed URL. No accounts, no server, no email: static XML a reader already
 # checks, rebuilt by the same daily Actions run that builds the page.
 
+# Set this when the custom domain's DNS is actually live. It does two things:
+# writes a CNAME into the published build, which is how GitHub Pages learns
+# about a custom domain, and makes the feeds advertise their real home.
+#
+# Deliberately empty until then. Publishing a CNAME switches Pages over at once
+# and redirects the github.io address to it, so doing this before the DNS
+# resolves takes the site down rather than moving it.
+SITE_DOMAIN = os.environ.get("ORTHOBRIEF_DOMAIN", "").strip().lstrip("https://").strip("/")
+
 BASE_URL = os.environ.get(
-    "ORTHOBRIEF_BASE_URL", "https://egldbrg12.github.io/orthobrief").rstrip("/")
+    "ORTHOBRIEF_BASE_URL",
+    f"https://{SITE_DOMAIN}" if SITE_DOMAIN else "https://egldbrg12.github.io/orthobrief",
+).rstrip("/")
 
 # The strongest standing query in the set, so it gets a name instead of having
 # to be assembled: the designs that change practice.
@@ -1999,6 +2010,10 @@ def write_snapshot(path: str, force: bool = False, public: bool = False,
 
     inline = dict(feeds)
     here = os.path.dirname(os.path.abspath(path)) or "."
+    if public and SITE_DOMAIN:
+        with open(os.path.join(here, "CNAME"), "w", encoding="utf-8") as fh:
+            fh.write(SITE_DOMAIN + "\n")
+        print(f"  CNAME -> {SITE_DOMAIN}", file=sys.stderr)
     if public:
         for days in LAZY_WINDOWS:
             key = str(days)

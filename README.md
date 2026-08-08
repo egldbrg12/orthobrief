@@ -523,6 +523,35 @@ Two things are remembered on the device, in `localStorage`, with no account:
 
 Nothing is uploaded anywhere; clearing site data resets both.
 
+## Moving to orthobrief.com
+
+Two steps, in this order. Doing them the other way round takes the site down
+instead of moving it, because a published `CNAME` switches GitHub Pages over
+immediately and redirects the `github.io` address to a domain that doesn't
+resolve yet.
+
+**1. DNS, at the registrar.** Four A records on the apex, and a CNAME for www:
+
+```
+@    A      185.199.108.153
+@    A      185.199.109.153
+@    A      185.199.110.153
+@    A      185.199.111.153
+www  CNAME  egldbrg12.github.io.
+```
+
+AAAA records are optional but worth adding for IPv6: `2606:50c0:8000::153`,
+`8001::153`, `8002::153`, `8003::153`. Wait for `dig +short orthobrief.com` to
+return those addresses before step 2.
+
+**2. Set `ORTHOBRIEF_DOMAIN` in the workflow.** That writes `public/CNAME`,
+which is how Pages learns the domain, and repoints `BASE_URL` so the 165 feeds
+advertise their real home. Then turn on *Enforce HTTPS* in Settings → Pages once
+GitHub has issued the certificate, which takes a few minutes.
+
+Old `github.io` feed URLs keep working — GitHub redirects them — so anyone who
+subscribed before the move doesn't have to do anything.
+
 ## Publishing
 
 `.github/workflows/publish.yml` rebuilds the page daily and deploys it to GitHub
