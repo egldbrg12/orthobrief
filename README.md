@@ -265,7 +265,7 @@ To swap in an LLM instead, replace `summarize()` in `app.py`; it takes
   two lines of monospace identifiers on every card is not what a phone reader
   came for. The buttons stay, Copy DOI among them, and an *unregistered* DOI
   still shows, because that one is a warning rather than an identifier.
-- **Window pills** — Today / 3 / 7 / 14 days. Journals publish in bursts, so a
+- **Window pills** — Today / One week / Two weeks / One month. Journals publish in bursts, so a
   quiet Sunday is normal; widen the window rather than assuming it's broken.
 - **A window is when a paper reached the indexes, not when it was published.**
   Crossref registers a DOI the day a paper goes online, but PubMed adds records
@@ -387,6 +387,14 @@ python3 app.py --port 8080          # different port
 python3 app.py --check              # validate the journal ISSN table
 python3 app.py --audit --days 14    # spot-check the study-type classifier
 ```
+
+The published build writes the month beside the page as `windows/30.json` and
+fetches it when the pill is pressed. A month is ~2,700 papers, and embedding it
+took the page from 3 MB to 6 MB — paid on first load by everyone, including the
+reader who never leaves Today. Split out, the page is 2.7 MB and the month costs
+3.1 MB only if asked for. The offline `--snapshot` keeps everything inline,
+because it's opened from `file://`, where a browser won't let a page fetch its
+neighbour.
 
 `--check` counts each ISSN's Crossref output over the last 90 days and flags any
 returning zero — those are typos or ISSN changes worth fixing in the `JOURNALS`

@@ -737,9 +737,9 @@
       </div>
       <div class="pills" id="windowPills">
         <button data-days="1" aria-pressed="true">Today</button>
-        <button data-days="3" aria-pressed="false">3 days</button>
-        <button data-days="7" aria-pressed="false">7 days</button>
-        <button data-days="14" aria-pressed="false">14 days</button>
+        <button data-days="7" aria-pressed="false">One week</button>
+        <button data-days="14" aria-pressed="false">Two weeks</button>
+        <button data-days="30" aria-pressed="false">One month</button>
       </div>
       <label class="search">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
@@ -1301,7 +1301,27 @@ function render(){
 /* ---------- data ---------- */
 async function load(days, force){
   if(SNAPSHOT){                       // offline file: swap in a pre-fetched window
-    state.feed = SNAPSHOT[String(days)] || state.feed;
+    const key = String(days);
+    /* The widest window is written beside the page rather than inside it, so a
+       reader who never asks for a month never downloads one. Fetched once, then
+       kept — pressing the pill again is instant. */
+    if(SNAPSHOT[key] && SNAPSHOT[key].lazy){
+      state.loading = true;
+      document.body.classList.add("loading");
+      document.getElementById("feed").innerHTML =
+        `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
+      try{
+        const r = await fetch(SNAPSHOT[key].lazy);
+        if(!r.ok) throw new Error(r.status);
+        SNAPSHOT[key] = await r.json();
+        state.error = "";
+      }catch(e){
+        state.error = "Couldn't load that window. Check your connection and try again.";
+      }
+      state.loading = false;
+      document.body.classList.remove("loading");
+    }
+    state.feed = (SNAPSHOT[key] && !SNAPSHOT[key].lazy) ? SNAPSHOT[key] : state.feed;
     state.days = days;
     render();
     return;

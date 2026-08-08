@@ -1503,7 +1503,17 @@ FIELDS_TOKEN = "/*__ORTHOBRIEF_FIELDS__*/[]"
 # of truth; the page just receives the patterns.
 CUES_TOKEN = "/*__ORTHOBRIEF_CUES__*/[]"
 
-SNAPSHOT_WINDOWS = (1, 3, 7, 14)
+# The four the pills offer. 14 has to stay in here whatever else changes: the
+# standing-query feeds are built from it.
+SNAPSHOT_WINDOWS = (1, 7, 14, 30)
+
+# A month is 2,700 papers, and embedding it doubled the published page from 3 MB
+# to 6 MB — paid on first load, by everyone, including the reader who never
+# leaves Today. These windows are written beside the page instead and fetched
+# when the pill is pressed. Only in the published build: the offline snapshot is
+# opened from file://, where a browser will not let a page fetch its neighbour,
+# so there everything stays inline and the size doesn't matter.
+LAZY_WINDOWS = (30,)
 
 
 def _encode(obj) -> str:
@@ -1986,8 +1996,23 @@ def write_snapshot(path: str, force: bool = False, public: bool = False,
         print(f"  fetching {days}-day window…", file=sys.stderr)
         feed = build_feed(days, force)
         feeds[str(days)] = _strip_abstracts(feed) if public else feed
+
+    inline = dict(feeds)
+    here = os.path.dirname(os.path.abspath(path)) or "."
+    if public:
+        for days in LAZY_WINDOWS:
+            key = str(days)
+            if key not in inline:
+                continue
+            os.makedirs(os.path.join(here, "windows"), exist_ok=True)
+            rel = f"windows/{days}.json"
+            with open(os.path.join(here, rel), "w", encoding="utf-8") as fh:
+                json.dump(feeds[key], fh, ensure_ascii=False, separators=(",", ":"))
+            size = os.path.getsize(os.path.join(here, rel)) / 1e6
+            print(f"  {rel} ({size:.1f} MB, fetched on demand)", file=sys.stderr)
+            inline[key] = {"lazy": rel}
     with open(path, "wb") as fh:
-        fh.write(render_page(feeds["1"], feeds))
+        fh.write(render_page(inline["1"], inline))
 
     # Home-screen icons go beside the page, because iOS wants a real file at a
     # real URL and will not take the SVG the favicon uses.
