@@ -265,7 +265,7 @@ To swap in an LLM instead, replace `summarize()` in `app.py`; it takes
   two lines of monospace identifiers on every card is not what a phone reader
   came for. The buttons stay, Copy DOI among them, and an *unregistered* DOI
   still shows, because that one is a warning rather than an identifier.
-- **Window pills** — Today / One week / Two weeks / One month. Journals publish in bursts, so a
+- **Window pills** — Today / 1 week / 2 weeks / 1 month. Journals publish in bursts, so a
   quiet Sunday is normal; widen the window rather than assuming it's broken.
 - **A window is when a paper reached the indexes, not when it was published.**
   Crossref registers a DOI the day a paper goes online, but PubMed adds records
