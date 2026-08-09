@@ -544,32 +544,51 @@ Nothing is uploaded anywhere; clearing site data resets both.
 
 ## Moving to orthobrief.com
 
-Two steps, in this order. Doing them the other way round takes the site down
-instead of moving it, because a published `CNAME` switches GitHub Pages over
-immediately and redirects the `github.io` address to a domain that doesn't
-resolve yet.
+The order below matters at two points, and both failure modes are silent: a
+`CNAME` published before DNS resolves takes the site down rather than moving it,
+and turning on Cloudflare's proxy before GitHub has issued its certificate stops
+that certificate ever being issued.
 
-**1. DNS, at the registrar.** Four A records on the apex, and a CNAME for www:
+**1. Point the domain at Cloudflare.** Make a free Cloudflare account, *Add a
+site*, enter `orthobrief.com`, choose the Free plan. Cloudflare scans for
+existing records and hands back two nameservers. In Namecheap: *Domain List →
+Manage → Nameservers → Custom DNS*, replace what's there with Cloudflare's two,
+save. Delegation usually completes within an hour or two.
+
+**2. Add the GitHub Pages records in Cloudflare** (*DNS → Records*), and leave
+the cloud icon **grey / DNS only** for now:
 
 ```
-@    A      185.199.108.153
-@    A      185.199.109.153
-@    A      185.199.110.153
-@    A      185.199.111.153
-www  CNAME  egldbrg12.github.io.
+A      @      185.199.108.153      DNS only
+A      @      185.199.109.153      DNS only
+A      @      185.199.110.153      DNS only
+A      @      185.199.111.153      DNS only
+CNAME  www    egldbrg12.github.io  DNS only
 ```
 
-AAAA records are optional but worth adding for IPv6: `2606:50c0:8000::153`,
-`8001::153`, `8002::153`, `8003::153`. Wait for `dig +short orthobrief.com` to
-return those addresses before step 2.
+**3. Set `ORTHOBRIEF_DOMAIN=orthobrief.com`** in the workflow env. The build
+writes `public/CNAME`, which is how Pages learns the domain, and repoints
+`BASE_URL` so the feeds and the link-preview tags carry the real address.
 
-**2. Set `ORTHOBRIEF_DOMAIN` in the workflow.** That writes `public/CNAME`,
-which is how Pages learns the domain, and repoints `BASE_URL` so the 165 feeds
-advertise their real home. Then turn on *Enforce HTTPS* in Settings → Pages once
-GitHub has issued the certificate, which takes a few minutes.
+**4. Turn on *Enforce HTTPS*** in Settings → Pages, once the checkbox stops
+being greyed out — GitHub needs a few minutes to issue a Let's Encrypt
+certificate. This has to happen while the records are still *DNS only*: with the
+proxy on, GitHub cannot complete the challenge and the certificate never
+arrives.
 
-Old `github.io` feed URLs keep working — GitHub redirects them — so anyone who
-subscribed before the move doesn't have to do anything.
+**5. Only now switch the five records to Proxied (orange)**, and set *SSL/TLS →
+Overview* to **Full**. Not Flexible — Pages redirects HTTP to HTTPS, and
+Flexible talks to it over HTTP, so the two bounce off each other forever.
+
+Analytics then appear under *Analytics & Logs* in Cloudflare: requests, unique
+visitors, countries, top paths. Server-side, so there is no script on the page,
+no cookies, and no third-party request added for the reader — the site still
+makes no external calls of any kind. It also counts the feeds, which a
+page-level analytics script never would, because a reader polling
+`feeds/field/shoulder-rct.xml` never loads the page.
+
+Old `github.io` URLs keep working throughout — GitHub redirects them — so
+anything already subscribed survives the move.
 
 ## Publishing
 
