@@ -64,6 +64,16 @@ paper paediatric. Papers from *outside* orthopaedics have to announce themselves
 in the title, which is what keeps a vascular limb-salvage series or a
 maxillofacial fracture paper out of the feed.
 
+**Front matter is dropped.** Journals give DOIs to things that are not papers:
+*Sponsoring Societies*, *Dorsiflex*, *Regenerative Medicine*, *Introducing the
+JBJS Ambassadors*, and in one case the journal's own name. They arrive typed as
+journal-articles and there is no flag distinguishing them. The test is no
+abstract **and** either no authors or a title under 25 characters — a fifth of
+real papers have no abstract yet, so that alone can't decide it. Across a week of
+665 papers this removed six items and nothing else. Corrections and errata are
+kept: they point at real papers, and the design classifier already tags them
+*Review / editorial*.
+
 **Veterinary papers are dropped outright**, on the journal. The topic queries ask
 PubMed about fractures and arthroplasty without saying "in people", so they used
 to return tibial fractures in miniature donkeys and the radiological anatomy of
@@ -316,6 +326,15 @@ Filters live in the popover rather than on a settings page on purpose: which
 fields and designs you're looking at is working state, not a preference. The
 counts next to them (`Arthroplasty 30`) describe the *current window*, which is
 context a separate page would lose.
+
+## Sharing the link
+
+`og:` and `twitter:` tags and a `<meta name="description">` are filled in at
+build time — they need absolute URLs, so `__ORTHOBRIEF_BASE__` is substituted
+from `BASE_URL` rather than written relative like the rest of the page. Without
+them a link pasted into Slack, iMessage or an email is a bare URL, which is most
+of how anyone first meets this. `icon-512.png` doubles as the preview image,
+since it is already a square PNG at a stable path.
 
 ## Adding it to a home screen
 

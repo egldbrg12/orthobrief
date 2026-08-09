@@ -273,9 +273,24 @@ VET_SUBJECT_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Front matter with no abstract and either no authors or a title too short to be
+# one. "Sponsoring Societies", "Dorsiflex", "Regenerative Medicine" and the
+# journal's own name all arrive as journal-articles with DOIs. A fifth of real
+# papers have no abstract yet, so that alone can't be the test — it takes the
+# second signal too. Across a week of 665 papers these caught six items and
+# nothing else.
+def _is_front_matter(paper: dict) -> bool:
+    title = (paper.get("title") or "").strip()
+    if paper.get("abstract"):
+        return False
+    return not (paper.get("authors") or []) or len(title) < 25
+
+
 # Front matter that is not a paper at all.
 JUNK_TITLE_RE = re.compile(
-    r"^\s*(journal )?(cme|continuing medical education) (instructions|questions)"
+    r"sponsoring societ|society news|in memoriam|^\s*announcement"
+    r"|^\s*introducing the\b|instructions for authors"
+    r"|^\s*(journal )?(cme|continuing medical education) (instructions|questions)"
     r"|^\s*(editorial board|table of contents|masthead|front matter|cover\b"
     r"|information for (readers|authors|contributors)|instructions (to|for) authors"
     r"|(subject|author) index|acknowledg(e)?ment of reviewers|list of reviewers"
@@ -300,7 +315,7 @@ def classify_fields(paper: dict) -> dict:
     ankle — otherwise the cues decide, and a paper can carry more than one.
     """
     title = paper.get("title") or ""
-    if JUNK_TITLE_RE.search(title):
+    if JUNK_TITLE_RE.search(title) or _is_front_matter(paper):
         return {"primary": "", "all": []}
     if VET_JOURNAL_RE.search(paper.get("journal") or ""):
         return {"primary": "", "all": []}
@@ -1497,6 +1512,7 @@ def _cache_write(days: int, feed: dict) -> None:
 
 DATA_TOKEN = "/*__ORTHOBRIEF_DATA__*/null"
 SNAPSHOT_TOKEN = "/*__ORTHOBRIEF_SNAPSHOT__*/null"
+BASE_TOKEN = "__ORTHOBRIEF_BASE__"
 FIELDS_TOKEN = "/*__ORTHOBRIEF_FIELDS__*/[]"
 # The field cues themselves, shipped to the browser so a PI's back catalogue is
 # classified by exactly the same rules as the feed. Python stays the one source
@@ -1526,6 +1542,9 @@ def render_page(feed: dict | None, snapshot: dict | None = None) -> bytes:
     the browser paints straight away and fetches the papers itself."""
     with open(os.path.join(HERE, "template.html"), encoding="utf-8") as fh:
         shell = fh.read()
+    # Preview tags need absolute URLs, so they are filled in here rather than
+    # written relative like everything else on the page.
+    shell = shell.replace(BASE_TOKEN, BASE_URL)
     shell = shell.replace(FIELDS_TOKEN, _encode(
         [{"key": f["key"], "label": f["label"], "blurb": f["blurb"]} for f in FIELDS]))
     shell = shell.replace(CUES_TOKEN, _encode(
