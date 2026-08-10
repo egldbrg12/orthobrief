@@ -37,6 +37,10 @@ jobs:
           # Crossref's polite pool wants a contact address. Held as a secret
           # rather than a variable so it is redacted from these public logs.
           ORTHOBRIEF_EMAIL: ${{ secrets.ORTHOBRIEF_EMAIL || 'orthobrief@users.noreply.github.com' }}
+          # Writes public/CNAME, which is how Pages learns the custom domain,
+          # and repoints BASE_URL so the feeds and the link-preview tags carry
+          # the real address rather than the github.io path.
+          ORTHOBRIEF_DOMAIN: orthobrief.com
         run: >
           python3 app.py --snapshot public/index.html --public --refresh
           --feeds public/feeds
