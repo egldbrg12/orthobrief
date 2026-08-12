@@ -395,10 +395,33 @@
   .why{font-size:12px;color:var(--accent);margin-top:6px}
 
   /* ---------- stats strip ---------- */
-  .stats{padding:2px 0 0;color:var(--ink-3);font-size:12.5px}
-  .stats .linkbtn{font-size:12.5px;text-decoration:none;border-bottom:1px dotted var(--line-2)}
-  .stats .linkbtn[aria-current]{color:var(--ink);font-weight:600;border-bottom-color:var(--accent)}
+  /* The count on the left, the ordering as a control on the right. The sort
+     used to be two underlined words inside this sentence, which reads as prose
+     and not as something you can press. */
+  .stats{
+    padding:2px 0 0;color:var(--ink-3);font-size:12.5px;
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  }
+  .stats .count{flex:1 1 auto;min-width:0}
   .stats .hintlet{opacity:.75}
+  .sortby{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+  .sortby .lbl{font-size:11.5px;color:var(--ink-3)}
+  .sortby .seg{
+    display:flex;background:var(--panel-2);border:1px solid var(--line);
+    border-radius:8px;padding:2px;gap:2px;
+  }
+  .sortby .seg button{
+    border:0;background:transparent;color:var(--ink-2);font:inherit;font-size:12px;
+    padding:4px 9px;border-radius:6px;cursor:pointer;white-space:nowrap;
+  }
+  .sortby .seg button[aria-current="true"]{
+    background:var(--panel);color:var(--ink);font-weight:600;box-shadow:var(--shadow);
+  }
+  @media (max-width:620px){
+    .stats{gap:6px}
+    .sortby .lbl{display:none}
+    .sortby .seg button{padding:5px 10px}
+  }
 
   /* ---------- cards ---------- */
   /* No card boxes: a hairline separates papers and the title carries the
@@ -1055,7 +1078,7 @@ function paperCard(p){
   const by = authorLine(p);
 
   return `
-  <article class="card">
+  <article class="card" data-id="${esc(paperId(p))}">
     ${metaHtml}
     <h2><a href="${esc(p.url || "#")}" target="_blank" rel="noopener">${esc(p.title)}</a></h2>
     ${by ? `<div class="authors">${esc(by)}</div>` : ""}
@@ -1211,6 +1234,7 @@ function paintList(papers){
     + (pending.length ? `<div class="more"></div>` : "");
   sentinel = feedEl.querySelector(".more");
   if(sentinel) feedObserver.observe(sentinel);
+  watchForReading(feedEl);
 }
 
 function paintMore(){
@@ -1218,6 +1242,7 @@ function paintMore(){
   const next = pending.splice(0, BATCH);
   painted += next.length;
   sentinel.insertAdjacentHTML("beforebegin", next.map(paperCard).join(""));
+  watchForReading(sentinel.parentElement);
   /* Re-observing while the sentinel is still on screen fills the viewport: the
      callback runs again, and again, until the sentinel has been pushed below. */
   if(pending.length) feedObserver.observe(sentinel);
@@ -1227,7 +1252,7 @@ function paintMore(){
 function render(){
   resetScores();
   resetScope();
-  markSeen(state.feed.papers || []);
+  noteNew(state.feed.papers || []);
   const f = state.feed, scope = inScope(), papers = visible();
   renderFieldsPicker();
 
@@ -1250,15 +1275,16 @@ function render(){
         late} published earlier and indexed since</span>` : "";
   document.getElementById("stats").innerHTML =
     // "1 of 122 paper" — with an "of N" clause the noun follows the total.
-    `<span>${papers.length}${papers.length !== scope.length ? ` of ${scope.length}` : ""} paper${
+    `<span class="count">${papers.length}${
+      papers.length !== scope.length ? ` of ${scope.length}` : ""} paper${
       (papers.length !== scope.length ? scope.length : papers.length) === 1 ? "" : "s"
       } ${what}${lateNote}</span>` +
-    (state.view === "saved" ? "" : `<span class="sortby"> · ordered by ` +
-      `<button class="linkbtn" data-sort="date"${byMatch ? "" : " aria-current=\"true\""}>newest</button> / ` +
-      `<button class="linkbtn" data-sort="match"${byMatch ? " aria-current=\"true\"" : ""}>what matches you</button>` +
-      (byMatch && PROFILE.pi ? ` <span class="hintlet">— from ${esc(PROFILE.pi.name)}'s work</span>` : "") +
-      (byMatch ? ` <span class="hintlet">— nothing is hidden, only reordered</span>` : "") +
-      `</span>`);
+    (state.view === "saved" ? "" : `<span class="sortby">` +
+      `<span class="lbl">Sort</span><span class="seg" role="group" aria-label="Order">` +
+      `<button data-sort="date" aria-current="${!byMatch}">Newest</button>` +
+      `<button data-sort="match" aria-current="${byMatch}"` +
+      ` title="Ranked by your fields, keywords and what you've saved. Nothing is hidden — only reordered.">` +
+      `Matches you</button></span></span>`);
 
   document.getElementById("banners").innerHTML =
     (SERVER_STALE ? `<div class="banner">The running OrthoBrief server is older than this
@@ -1759,19 +1785,49 @@ let DISMISSED = loadStore(DISMISS_KEY);
    the "new" marks don't evaporate out from under you as you read. */
 const NEW_IDS = new Set();
 
-function markSeen(papers){
-  const today = Math.floor(Date.now() / 86400000);
-  let dirty = false;
+const _today = () => Math.floor(Date.now() / 86400000);
+
+/* Which of these the reader has never met. Held for the session so the New
+   marks and the Unread list don't shift while they are being read. */
+function noteNew(papers){
   papers.forEach(p => {
     const id = paperId(p);
-    if(SEEN[id] === undefined){ NEW_IDS.add(id); dirty = true; }
-    if(SEEN[id] !== today){ SEEN[id] = today; dirty = true; }
+    if(SEEN[id] === undefined) NEW_IDS.add(id);
   });
-  if(dirty){
-    for(const [id, day] of Object.entries(SEEN))
-      if(today - day > SEEN_DAYS && !NEW_IDS.has(id)) delete SEEN[id];
-    saveStore(SEEN_KEY, SEEN);
-  }
+}
+
+/* A paper is read when its card has been on screen — not when the feed
+   happened to contain it. This used to mark every paper in the window the
+   moment the page rendered, including the hundred below the fold that the
+   painter had not drawn yet, so a single visit emptied Unread completely and
+   the tab was useless from the second visit on. */
+function markRead(id){
+  const today = _today();
+  if(SEEN[id] === today) return;
+  SEEN[id] = today;
+  for(const [k, day] of Object.entries(SEEN))
+    if(today - day > SEEN_DAYS && !NEW_IDS.has(k)) delete SEEN[k];
+  saveStore(SEEN_KEY, SEEN);
+}
+
+const seenObserver = "IntersectionObserver" in window
+  ? new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if(!e.isIntersecting) return;
+        if(e.target.dataset.id) markRead(e.target.dataset.id);
+        seenObserver.unobserve(e.target);
+      });
+    })
+  : null;
+
+/* Called after every paint. Cards already watched carry a flag, so a batch
+   append doesn't re-observe the ones above it. */
+function watchForReading(root){
+  if(!seenObserver) return;
+  root.querySelectorAll("article.card[data-id]:not([data-watched])").forEach(el => {
+    el.setAttribute("data-watched", "");
+    seenObserver.observe(el);
+  });
 }
 
 const isNew = p => NEW_IDS.has(paperId(p));

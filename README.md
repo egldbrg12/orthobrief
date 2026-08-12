@@ -299,12 +299,22 @@ To swap in an LLM instead, replace `summarize()` in `app.py`; it takes
   listing what it matches. It still searches title, authors, abstract, journal
   and study type — but a placeholder is read by someone deciding whether to
   bother, not by someone who wants the field list.
+- **A paper counts as read when its card has been on screen**, not when the feed
+  happened to contain it. Rendering used to mark every paper in the window —
+  including the hundred below the fold the batched painter had not drawn — so one
+  visit emptied Unread and the tab was useless from the second visit on. An
+  IntersectionObserver marks each card as it appears; on a typical load that is
+  three papers, not a hundred and forty. Within a session Unread doesn't shrink
+  as you scroll, because a list reshuffling under the reader is worse than a
+  count that updates on the next visit.
 - **All / Unread / Saved** decide *which* papers are listed. *Unread* is what
   this page hasn't shown you before, so a return visit is a delta rather than
   the same window again — it's about you, not about publication date. *Saved*
   is your own shelf: papers stay after they drop out of the feed, and export as
   **RIS** or **BibTeX** for Zotero.
-- **Ordered by newest / what matches you** decides the *order* of whichever list
+- **Sort** is a segmented control on the right of the count line — Newest or
+  Matches you. It used to be two underlined words inside that sentence, which
+  reads as prose rather than as something you can press. It decides the *order* of whichever list
   you're in. Sorting by match is not a filter — the count doesn't change, and
   the line says so. It used to be a fourth tab called "For you", which made a
   re-ordering look like a different set of papers.
