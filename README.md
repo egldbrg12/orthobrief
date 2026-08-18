@@ -299,14 +299,13 @@ To swap in an LLM instead, replace `summarize()` in `app.py`; it takes
   listing what it matches. It still searches title, authors, abstract, journal
   and study type — but a placeholder is read by someone deciding whether to
   bother, not by someone who wants the field list.
-- **A paper counts as read when its card has been on screen**, not when the feed
-  happened to contain it. Rendering used to mark every paper in the window —
-  including the hundred below the fold the batched painter had not drawn — so one
-  visit emptied Unread and the tab was useless from the second visit on. An
-  IntersectionObserver marks each card as it appears; on a typical load that is
-  three papers, not a hundred and forty. Within a session Unread doesn't shrink
-  as you scroll, because a list reshuffling under the reader is worse than a
-  count that updates on the next visit.
+- **New means arrived since your last visit** — a delta, not a to-read queue.
+  *Saved* is the queue; this answers the different question of what turned up
+  while you were away. Two earlier attempts got this wrong in opposite
+  directions: marking every paper read on render left the tab empty from the
+  second visit on, and marking one only once its card had been on screen made
+  the tab equal *All*, because nobody scrolls past eighty papers. A count that
+  always matches the tab beside it is worse than no count.
 - **All / Unread / Saved** decide *which* papers are listed. *Unread* is what
   this page hasn't shown you before, so a return visit is a delta rather than
   the same window again — it's about you, not about publication date. *Saved*

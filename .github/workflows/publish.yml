@@ -1,11 +1,17 @@
 name: Publish OrthoBrief
 
-# Rebuilds the feed every morning and publishes the standalone page.
-# 11:00 UTC is 07:00 US Eastern — after the overnight European issues land and
-# before anyone looks. Cron on GitHub Actions is always UTC.
+# Rebuilds the feed and publishes the standalone page. Four times a day, not
+# once: the site is a static snapshot, so "Today" only ever contains what had
+# reached Crossref and PubMed by the moment of the build. Building at 11:00 UTC
+# alone meant Today froze at about fifteen papers while the day went on to
+# deliver eighty, which reads as the feed drying up rather than as a stale
+# snapshot. Cron on GitHub Actions is always UTC.
+#
+# 11:00 is 07:00 US Eastern, after the overnight European issues land. The other
+# three keep the day's arrivals visible on the day they arrive.
 on:
   schedule:
-    - cron: "0 11 * * *"
+    - cron: "0 5,11,17,23 * * *"
   workflow_dispatch: {}          # a "run it now" button in the Actions tab
   push:
     branches: [main]

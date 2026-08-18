@@ -770,7 +770,7 @@
       <div class="pills" id="viewPills">
         <button data-view="all" aria-pressed="true" title="Everything published in this window">All</button>
         <button data-view="new" aria-pressed="false"
-                title="Papers this page hasn't shown you before">Unread<span class="tag" id="newCount"></span></button>
+                title="Papers that have arrived since your last visit">New<span class="tag" id="newCount"></span></button>
         <button data-view="saved" aria-pressed="false"
                 title="Papers you starred — they stay here after they leave the feed">Saved<span class="tag" id="savedCount"></span></button>
       </div>
@@ -1234,7 +1234,6 @@ function paintList(papers){
     + (pending.length ? `<div class="more"></div>` : "");
   sentinel = feedEl.querySelector(".more");
   if(sentinel) feedObserver.observe(sentinel);
-  watchForReading(feedEl);
 }
 
 function paintMore(){
@@ -1242,7 +1241,6 @@ function paintMore(){
   const next = pending.splice(0, BATCH);
   painted += next.length;
   sentinel.insertAdjacentHTML("beforebegin", next.map(paperCard).join(""));
-  watchForReading(sentinel.parentElement);
   /* Re-observing while the sentinel is still on screen fills the viewport: the
      callback runs again, and again, until the sentinel has been pushed below. */
   if(pending.length) feedObserver.observe(sentinel);
@@ -1264,7 +1262,7 @@ function render(){
     `<b>${end.toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric",year:"numeric"})}</b>` +
     (f.window.days > 1 ? `<br>window: ${fmtDate(f.window.start)} → ${fmtDate(f.window.end)}` : "");
 
-  const what = state.view === "new" ? "you haven't seen before"
+  const what = state.view === "new" ? "since your last visit"
     : state.view === "saved" ? "you saved" : "added in this window";
   const byMatch = state.sort === "match";
   /* Say it once, where the count is, rather than on every card that predates
@@ -1325,7 +1323,7 @@ function render(){
           : "No papers yet in these fields"}</h3>
         <p>${
           state.view === "saved" ? "Star a paper with ☆ Save and it stays here — across windows, and after it drops out of the feed."
-          : state.view === "new" && f.papers.length ? "Every paper in this window has been on the page before. Widen the window, or come back tomorrow."
+          : state.view === "new" && f.papers.length ? "Nothing has arrived since you last looked. Journals publish in bursts — try a wider window, or come back later today."
           : state.error ? "See the message above."
           : !f.papers.length
           ? "Journals publish in bursts, and most drop new issues on weekday mornings (US/EU time). Try a wider window."
@@ -1787,47 +1785,27 @@ const NEW_IDS = new Set();
 
 const _today = () => Math.floor(Date.now() / 86400000);
 
-/* Which of these the reader has never met. Held for the session so the New
-   marks and the Unread list don't shift while they are being read. */
+/* "New" means arrived since your last visit — a delta, not a to-read queue.
+   Saved is the queue; this answers the different question of what turned up
+   while you were away.
+
+   Two earlier attempts were both wrong in opposite directions. Marking every
+   paper read on render made the tab empty from the second visit on. Marking one
+   only once its card had been on screen made the tab equal All, because nobody
+   scrolls past eighty papers — a count that always matches the tab next to it
+   is worse than no count. So: what the feed showed you is delivered, and next
+   visit only genuine arrivals are new. */
 function noteNew(papers){
+  const today = _today();
   papers.forEach(p => {
     const id = paperId(p);
     if(SEEN[id] === undefined) NEW_IDS.add(id);
   });
-}
-
-/* A paper is read when its card has been on screen — not when the feed
-   happened to contain it. This used to mark every paper in the window the
-   moment the page rendered, including the hundred below the fold that the
-   painter had not drawn yet, so a single visit emptied Unread completely and
-   the tab was useless from the second visit on. */
-function markRead(id){
-  const today = _today();
-  if(SEEN[id] === today) return;
-  SEEN[id] = today;
-  for(const [k, day] of Object.entries(SEEN))
-    if(today - day > SEEN_DAYS && !NEW_IDS.has(k)) delete SEEN[k];
+  if(!papers.length) return;
+  papers.forEach(p => { SEEN[paperId(p)] = today; });
+  for(const [id, day] of Object.entries(SEEN))
+    if(today - day > SEEN_DAYS && !NEW_IDS.has(id)) delete SEEN[id];
   saveStore(SEEN_KEY, SEEN);
-}
-
-const seenObserver = "IntersectionObserver" in window
-  ? new IntersectionObserver(entries => {
-      entries.forEach(e => {
-        if(!e.isIntersecting) return;
-        if(e.target.dataset.id) markRead(e.target.dataset.id);
-        seenObserver.unobserve(e.target);
-      });
-    })
-  : null;
-
-/* Called after every paint. Cards already watched carry a flag, so a batch
-   append doesn't re-observe the ones above it. */
-function watchForReading(root){
-  if(!seenObserver) return;
-  root.querySelectorAll("article.card[data-id]:not([data-watched])").forEach(el => {
-    el.setAttribute("data-watched", "");
-    seenObserver.observe(el);
-  });
 }
 
 const isNew = p => NEW_IDS.has(paperId(p));
