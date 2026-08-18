@@ -2185,6 +2185,29 @@ function wrapText(ctx, text, maxWidth, maxLines){
   return lines;
 }
 
+/* The monogram, taken from the one in the header rather than kept as a second
+   copy — Path2D reads the same `d` the page already carries. */
+let _markPath = null;
+function markPath(){
+  if(_markPath === null){
+    const d = document.querySelector(".markart path")?.getAttribute("d");
+    _markPath = d && window.Path2D ? new Path2D(d) : false;
+  }
+  return _markPath;
+}
+
+/* Canvas has no letter-spacing worth relying on, and the whole look here rests
+   on tracked-out small caps, so it is drawn a character at a time. */
+function trackedWidth(x, text, sp){
+  let w = 0;
+  for(const ch of text) w += x.measureText(ch).width + sp;
+  return w - sp;
+}
+function drawTracked(x, text, px, py, sp){
+  let cx = px;
+  for(const ch of text){ x.fillText(ch, cx, py); cx += x.measureText(ch).width + sp; }
+}
+
 function drawShareCard(p){
   const dpr = 2;                                   // crisp on a retina screen
   const c = document.createElement("canvas");
@@ -2192,47 +2215,94 @@ function drawShareCard(p){
   const x = c.getContext("2d");
   x.scale(dpr, dpr);
 
-  const INK = "#1f1d1a", MUTED = "#6b665d", ACCENT = "#2f5d8a", LINE = "#e4e1d9";
-  const sans = '-apple-system, "Segoe UI", Helvetica, Arial, sans-serif';
-  const serif = 'Georgia, "Iowan Old Style", serif';
-  const pad = 64;
+  /* A printed notice rather than a screenshot: laid paper, a ruled border, and
+     everything set in the serif the page uses for its titles. */
+  const PAPER = "#f6f1e4", INK = "#22201c", MUTED = "#6d675b",
+        ACCENT = "#2f5d8a", RULE = "#c9c0ab";
+  const serif = 'Georgia, "Iowan Old Style", "Times New Roman", serif';
+  const pad = 74;
+  const mid = CARD_W / 2;
 
-  x.fillStyle = "#fffffe"; x.fillRect(0, 0, CARD_W, CARD_H);
-  x.fillStyle = ACCENT; x.fillRect(0, 0, CARD_W, 8);
+  x.fillStyle = PAPER; x.fillRect(0, 0, CARD_W, CARD_H);
 
-  // masthead
-  x.font = `600 22px ${sans}`; x.fillStyle = ACCENT;
-  x.fillText("OrthoBrief", pad, pad + 6);
+  /* Faint fibres. Deterministic, so the same paper shares the same card twice
+     — a share image that changes between copies looks like a glitch. */
+  let seed = 7;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  x.fillStyle = "rgba(120,105,80,.05)";
+  for(let i = 0; i < 900; i++) x.fillRect(rnd() * CARD_W, rnd() * CARD_H, 1.4, 1.1);
+
+  // double rule, the way a printed notice is framed
+  x.strokeStyle = RULE;
+  x.lineWidth = 2.5; x.strokeRect(26, 26, CARD_W - 52, CARD_H - 52);
+  x.lineWidth = 1;   x.strokeRect(35, 35, CARD_W - 70, CARD_H - 70);
+
+  // ---- letterhead: monogram, name, rule ----
+  const mark = markPath();
+  let y = 74;
+  if(mark){
+    const h = 46, s = h / 526;                     // the mark's viewBox is 792x526
+    x.save();
+    x.translate(mid - (792 * s) / 2, y);
+    x.scale(s, s);
+    x.fillStyle = INK;
+    x.fill(mark, "evenodd");
+    x.restore();
+    y += h + 26;
+  }
+  x.fillStyle = INK; x.font = `400 21px ${serif}`;
+  const nameW = trackedWidth(x, "ORTHOBRIEF", 6);
+  drawTracked(x, "ORTHOBRIEF", mid - nameW / 2, y, 6);
+  y += 20;
+  x.strokeStyle = RULE; x.lineWidth = 1;
+  x.beginPath(); x.moveTo(pad, y); x.lineTo(CARD_W - pad, y); x.stroke();
+  y += 46;
+
+  // ---- what kind of paper this is ----
   const tags = [(p.study || {}).label, ((p.fields || {}).all || [])
-    .map(k => FIELD_LABEL[k] || k)[0]].filter(Boolean).join("   ·   ");
+    .map(k => FIELD_LABEL[k] || k)[0]].filter(Boolean).join("  ·  ").toUpperCase();
   if(tags){
-    x.font = `400 20px ${sans}`; x.fillStyle = MUTED;
-    x.fillText(tags, pad + x.measureText("OrthoBrief").width + 28, pad + 6);
+    x.fillStyle = ACCENT; x.font = `400 15px ${serif}`;
+    const w = trackedWidth(x, tags, 3.2);
+    drawTracked(x, tags, mid - w / 2, y, 3.2);
+    y += 48;                       // clear of the title's ascenders
   }
 
-  // title — the reason anyone opens it
-  x.fillStyle = INK; x.font = `600 46px ${serif}`;
-  let y = pad + 88;
-  wrapText(x, p.title || "", CARD_W - pad * 2, 4).forEach(l => { x.fillText(l, pad, y); y += 58; });
+  // ---- the title, centred like a heading on a notice ----
+  x.fillStyle = INK; x.font = `400 44px ${serif}`;
+  const title = wrapText(x, p.title || "", CARD_W - pad * 2 - 40, 4);
+  title.forEach(l => {
+    x.fillText(l, mid - x.measureText(l).width / 2, y);
+    y += 54;
+  });
 
-  // finding — the rule is sized to the text, not the other way round
+  // ---- the finding, in italic ----
+  // Titles run from six words to thirty, so the summary takes whatever room the
+  // title left rather than a fixed three lines. Four long title lines and three
+  // summary lines would otherwise run straight through the imprint.
+  const footY = CARD_H - 84;
   if(p.summary){
-    y += 14;
-    x.font = `400 25px ${sans}`;
-    const lines = wrapText(x, p.summary, CARD_W - pad * 2 - 26, 3);
-    x.fillStyle = ACCENT; x.fillRect(pad, y - 26, 3, lines.length * 34 + 6);
+    y += 12;
+    x.font = `italic 400 23px ${serif}`;
     x.fillStyle = MUTED;
-    lines.forEach(l => { x.fillText(l, pad + 22, y); y += 34; });
+    const room = Math.floor((footY - 56 - y) / 32);
+    if(room > 0){
+      wrapText(x, p.summary, CARD_W - pad * 2 - 90, Math.min(3, room))
+        .forEach(l => { x.fillText(l, mid - x.measureText(l).width / 2, y); y += 32; });
+    }
   }
 
-  // source line
-  x.strokeStyle = LINE; x.lineWidth = 1;
-  x.beginPath(); x.moveTo(pad, CARD_H - 108); x.lineTo(CARD_W - pad, CARD_H - 108); x.stroke();
-  x.fillStyle = INK; x.font = `600 23px ${sans}`;
-  x.fillText(wrapText(x, p.journal || "", CARD_W - pad * 2, 1)[0] || "", pad, CARD_H - 66);
-  x.fillStyle = MUTED; x.font = `400 21px ${sans}`;
-  const meta = [(p.date || "").slice(0, 10), p.doi ? `doi:${p.doi}` : ""].filter(Boolean).join("   ·   ");
-  x.fillText(meta, pad, CARD_H - 34);
+  // ---- imprint ----
+  x.strokeStyle = RULE; x.lineWidth = 1;
+  x.beginPath(); x.moveTo(mid - 70, footY - 34); x.lineTo(mid + 70, footY - 34); x.stroke();
+  x.fillStyle = INK; x.font = `italic 400 22px ${serif}`;
+  const jrnl = wrapText(x, p.journal || "", CARD_W - pad * 2, 1)[0] || "";
+  x.fillText(jrnl, mid - x.measureText(jrnl).width / 2, footY);
+  x.fillStyle = MUTED; x.font = `400 14px ${serif}`;
+  const meta = [(p.date || "").slice(0, 10), p.doi ? `doi:${p.doi}` : ""]
+    .filter(Boolean).join("   ·   ").toUpperCase();
+  const mw = trackedWidth(x, meta, 2.4);
+  drawTracked(x, meta, mid - mw / 2, footY + 30, 2.4);
   return c;
 }
 

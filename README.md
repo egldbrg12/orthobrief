@@ -336,7 +336,18 @@ fields and designs you're looking at is working state, not a preference. The
 counts next to them (`Arthroplasty 30`) describe the *current window*, which is
 context a separate page would lose.
 
-## Sharing the link
+## Sharing
+
+The share image is drawn as a printed notice rather than a screenshot: laid
+paper with deterministic fibres, a double rule, and everything centred in the
+serif the page uses for titles, with tracked small caps for the metadata. The
+bone monogram sits at the head of it, read out of the page's own SVG through
+`Path2D` rather than kept as a second copy, so it cannot drift from the logo.
+
+Canvas has no letter-spacing worth relying on, so the tracked text is drawn a
+character at a time. The layout is adaptive: titles run from six words to
+thirty, and the summary takes whatever room the title left — four long title
+lines and three summary lines would otherwise run straight through the imprint. the link
 
 `og:` and `twitter:` tags and a `<meta name="description">` are filled in at
 build time — they need absolute URLs, so `__ORTHOBRIEF_BASE__` is substituted
