@@ -299,13 +299,19 @@ To swap in an LLM instead, replace `summarize()` in `app.py`; it takes
   listing what it matches. It still searches title, authors, abstract, journal
   and study type — but a placeholder is read by someone deciding whether to
   bother, not by someone who wants the field list.
-- **New means arrived since your last visit** — a delta, not a to-read queue.
-  *Saved* is the queue; this answers the different question of what turned up
-  while you were away. Two earlier attempts got this wrong in opposite
-  directions: marking every paper read on render left the tab empty from the
-  second visit on, and marking one only once its card had been on screen made
-  the tab equal *All*, because nobody scrolls past eighty papers. A count that
-  always matches the tab beside it is worse than no count.
+- **Unread is a queue you can clear.** A paper is read once its card has been on
+  screen, and *Mark all as read* in the More menu declares the rest dealt with.
+  Both halves matter: at eighty papers a day nobody scrolls to the end, so
+  without the second one the queue only grows and the count sits at the same
+  number as *All*. Two earlier attempts failed on exactly that — one marked
+  every paper read on render, so the tab was empty from the second visit; the
+  other marked only what had been seen, so the tab equalled everything.
+- **Conference proceedings are dropped.** A society's abstract book lands as
+  hundreds of DOIs in one supplement, numbered in podium order — *"341. Nicotine
+  without smoke…"* — and one dump buries a day: 353 of 389 papers when NASS
+  published through *The Spine Journal*. A leading `NNN.` is a numbering
+  convention, never a title; across 1,180 papers of ordinary weeks not one
+  matched.
 - **All / Unread / Saved** decide *which* papers are listed. *Unread* is what
   this page hasn't shown you before, so a return visit is a delta rather than
   the same window again — it's about you, not about publication date. *Saved*

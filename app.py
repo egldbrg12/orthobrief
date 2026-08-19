@@ -286,6 +286,15 @@ def _is_front_matter(paper: dict) -> bool:
     return not (paper.get("authors") or []) or len(title) < 25
 
 
+# Conference proceedings. A society meeting's abstract book arrives as several
+# hundred DOIs in one supplement, numbered in podium order — "341. Nicotine
+# without smoke…" — and one dump buries a whole day: 353 of 389 papers on the
+# day NASS published through The Spine Journal, none of them carrying an
+# abstract. A leading "NNN." is a numbering convention, never a title; across
+# 1,180 papers of ordinary weeks not one matched.
+CONFERENCE_TITLE_RE = re.compile(r"^\s*\d{1,4}\.\s")
+
+
 # Front matter that is not a paper at all.
 JUNK_TITLE_RE = re.compile(
     r"sponsoring societ|society news|in memoriam|^\s*announcement"
@@ -315,7 +324,8 @@ def classify_fields(paper: dict) -> dict:
     ankle — otherwise the cues decide, and a paper can carry more than one.
     """
     title = paper.get("title") or ""
-    if JUNK_TITLE_RE.search(title) or _is_front_matter(paper):
+    if (JUNK_TITLE_RE.search(title) or _is_front_matter(paper)
+            or CONFERENCE_TITLE_RE.match(title)):
         return {"primary": "", "all": []}
     if VET_JOURNAL_RE.search(paper.get("journal") or ""):
         return {"primary": "", "all": []}
