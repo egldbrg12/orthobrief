@@ -1183,15 +1183,36 @@ function renderFieldsPicker(){
     </div>`;
 }
 
+/* What a tab would actually show if you pressed it.
+   The badges used to count the raw window while the list applied the reader's
+   subspecialties, the design chip and the search box — so narrowing to one
+   field could leave "Unread 32" above an empty page. Running the real pipeline
+   with the view swapped in guarantees the number and the list agree, because
+   they are the same code. */
+function countForView(view){
+  const prev = state.view;
+  state.view = view;
+  try{
+    const q = state.q.trim().toLowerCase();
+    return computeScope().filter(p => {
+      if(state.type && (p.study || {}).key !== state.type) return false;
+      return !q || textOf(p).search.includes(q);
+    }).length;
+  }finally{
+    state.view = prev;
+  }
+}
+
 function renderViewCounts(){
-  const newN = (state.feed.papers || []).filter(isNew).length;
-  const savedN = Object.keys(SAVED).length;
+  const newN = countForView("new");
+  const savedN = countForView("saved");
   document.getElementById("newCount").textContent = newN ? ` ${newN}` : "";
   document.getElementById("savedCount").textContent = savedN ? ` ${savedN}` : "";
   [...document.querySelectorAll("#viewPills button")].forEach(b =>
     b.setAttribute("aria-pressed", String(b.dataset.view === state.view)));
   document.getElementById("windowPills").hidden = state.view === "saved";
-  document.getElementById("savedBar").hidden = state.view !== "saved" || !savedN;
+  document.getElementById("savedBar").hidden =
+    state.view !== "saved" || !Object.keys(SAVED).length;
 }
 
 /* A week of orthopaedics is six hundred papers and about 1.7 MB of HTML, and
