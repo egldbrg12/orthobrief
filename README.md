@@ -189,13 +189,16 @@ python3 app.py --audit --days 14 -v      # ...every call
 happens on cached feeds too, so a cue edit takes effect without re-querying the
 APIs.
 
-## The summaries
+## The key takeaway
 
 Extractive, not generated — deterministic, offline, and $0.
 
-- **Structured abstract** → pulls the `CONCLUSIONS` section, prepended with the
-  single most quantitative sentence from `RESULTS` (one carrying a %, p-value,
-  CI, or n).
+- **Structured abstract** → the `CONCLUSIONS` section, followed by the single
+  most quantitative sentence from `RESULTS` (one carrying a %, p-value, CI or
+  n). The number used to come *first*, so the line opened on "81% vs 64%
+  (p<0.001)" and the finding the authors actually drew came second — or got
+  trimmed off the end. The conclusion is the takeaway; the number supports it.
+  Changed 45% of takeaways.
 - **Structured, but with no conclusion** — a trial protocol, a case report, a
   narrative review — → takes `DISCUSSION`, `EXPERT OPINION`, `CLINICAL
   RELEVANCE` or `OBSERVATIONS`, then `RESULTS`, in that order. It used to fall

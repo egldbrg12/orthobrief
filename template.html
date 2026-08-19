@@ -454,7 +454,12 @@
     background:none;border-left:2px solid var(--accent);border-radius:0;
     padding:2px 0 2px 16px;margin:14px 0 0;
   }
-  .tldr .lbl{display:none}
+  /* Named, not hidden: the line is the paper's own conclusion, and saying so is
+     what stops it reading as an editorial gloss we wrote. */
+  .tldr .lbl{
+    display:block;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--ink-3);font-weight:600;margin-bottom:5px;
+  }
   .tldr p{margin:0;font-size:15px;color:var(--ink-2);line-height:1.6;max-width:88ch}
 
   details.abs{margin-top:10px}
@@ -1086,7 +1091,7 @@ function paperCard(p){
     <div class="byline"${labels.length > 1
       ? ` title="This paper is in more than one subspecialty"` : ""}>${esc(bylineText)}</div>
     ${whyHtml}
-    ${p.summary ? `<div class="tldr"><span class="lbl">Summary</span><p>${esc(p.summary)}</p></div>` : ""}
+    ${p.summary ? `<div class="tldr"><span class="lbl">Key takeaway</span><p>${esc(p.summary)}</p></div>` : ""}
     ${p.abstract
       ? `<details class="abs"><summary>Full abstract</summary>
            <div class="abs-body">${renderAbstract(p.abstract)}</div>
@@ -2332,15 +2337,17 @@ function drawShareCard(p){
     x.fillStyle = ACCENT; x.font = `400 15px ${serif}`;
     const w = trackedWidth(x, tags, 3.2);
     drawTracked(x, tags, mid - w / 2, y, 3.2);
-    y += 48;                       // clear of the title's ascenders
+    y += 44;                       // clear of the title's ascenders
   }
 
   // ---- the title, centred like a heading on a notice ----
   x.fillStyle = INK; x.font = `400 44px ${serif}`;
-  const title = wrapText(x, p.title || "", CARD_W - pad * 2 - 40, 4);
+  /* Three lines, not four: the takeaway is the reason to share the card at all,
+     so a long title gives up its last line rather than crowding it out. */
+  const title = wrapText(x, p.title || "", CARD_W - pad * 2 - 40, p.summary ? 3 : 4);
   title.forEach(l => {
     x.fillText(l, mid - x.measureText(l).width / 2, y);
-    y += 54;
+    y += 52;
   });
 
   // ---- the finding, in italic ----
@@ -2349,13 +2356,20 @@ function drawShareCard(p){
   // summary lines would otherwise run straight through the imprint.
   const footY = CARD_H - 84;
   if(p.summary){
-    y += 12;
-    x.font = `italic 400 23px ${serif}`;
-    x.fillStyle = MUTED;
-    const room = Math.floor((footY - 56 - y) / 32);
+    y += 18;
+    /* Space left between here and the imprint rule, minus the label. Measured
+       rather than assumed: with a three-line title the previous arithmetic left
+       room for zero lines, so the takeaway silently never drew. */
+    const LINE = 29, LABEL = 24;
+    const room = Math.floor(((footY - 40) - y - LABEL) / LINE);
     if(room > 0){
-      wrapText(x, p.summary, CARD_W - pad * 2 - 90, Math.min(3, room))
-        .forEach(l => { x.fillText(l, mid - x.measureText(l).width / 2, y); y += 32; });
+      x.font = `400 13px ${serif}`; x.fillStyle = MUTED;
+      const lw = trackedWidth(x, "KEY TAKEAWAY", 3);
+      drawTracked(x, "KEY TAKEAWAY", mid - lw / 2, y, 3);
+      y += LABEL;
+      x.font = `italic 400 21px ${serif}`; x.fillStyle = INK;
+      wrapText(x, p.summary, CARD_W - pad * 2 - 80, Math.min(3, room))
+        .forEach(l => { x.fillText(l, mid - x.measureText(l).width / 2, y); y += LINE; });
     }
   }
 

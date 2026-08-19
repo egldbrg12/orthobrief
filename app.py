@@ -550,7 +550,11 @@ def summarize(abstract: str, title: str = "") -> str:
         results = split_sentences(_first_match(sections, RESULT_KEYS))
         quant = next((s for s in results if _QUANT_RE.search(s)), "")
         if concl:
-            picked = concl if not quant else [quant] + concl[:1]
+            # The conclusion is the takeaway; a number supports it rather than
+            # leading it. This used to put the hardest RESULTS sentence first,
+            # so the line opened on "81% vs 64% (p<0.001)" and the finding the
+            # authors actually drew came second — or got trimmed off.
+            picked = concl[:2] if not quant else concl[:1] + [quant]
             return _trim(picked)
 
         # No conclusion at all — a protocol, a case report, a narrative review.
